@@ -1,0 +1,74 @@
+.border {
+    border: solid 1px #666666;
+}
+
+.border-light {
+    border: solid 1px #AAAAAA;
+}
+
+.bottom {
+    vertical-align: bottom;
+}
+
+.center {
+    text-align: center;
+}
+
+.hidden {
+    display: none;
+}
+
+.indent {
+    margin-left: 50px;
+}
+
+.left {
+    text-align: left;
+}
+
+.middle {
+    vertical-align: middle;
+}
+
+.padding-none {
+    padding: 0px;
+}
+
+.padding-side {
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.padding-some {
+    padding: 2px 4px 2px 4px;
+}
+
+.right {
+    text-align: right;
+}
+
+.shaded {
+    background-color: #AAAAAA;
+}
+
+.shaded-light {
+    background-color: #EEEEEE;
+}
+
+.top {
+    vertical-align: top;
+}
+
+table {
+    border-collapse: collapse;
+    font-size: inherit;
+    font-style: inherit;
+    font-weight: inherit;
+    font-variant: inherit;
+}
+
+td, th {
+    padding: 0px;
+    margin: 0px;
+    vertical-align: top;
+}

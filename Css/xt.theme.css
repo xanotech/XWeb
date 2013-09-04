@@ -1,0 +1,109 @@
+#Content {
+    background-color: #FFFFFF;
+    border-left: solid 1px #DDDDEE;
+    border-right: solid 1px #DDDDEE;
+    min-height: 200px;
+    padding: 20px 20px 5px 20px;
+    text-align: justify;
+}
+
+#Footer {
+    color: #666666;
+    background-color: #DDDDEE;
+    font-size: 10px;
+    line-height: 20px;
+    padding-right: 10px;
+    text-align: right;
+}
+
+#Header {
+    background-image: url("../Images/Logo.png");
+    background-repeat: no-repeat;
+    height: 92px;
+}
+
+#Nav {
+    height: 80px;
+    text-align: right;
+    vertical-align: middle;
+    width: 100%;
+}
+
+#Nav a {
+    color: #FFC90E;
+    font-size: 20px;
+    font-weight: bold;
+    margin: 2px 8px;
+    text-decoration: none;
+}
+
+#Nav a:hover {
+    color: #FFFFFF;
+}
+
+#Page {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 900px;
+    /* Used to simulate max-width in IE */
+    width: expression(document.body.clientWidth > 900 ? "900px" : "auto");
+}
+
+#Page table {
+    width: 100%;
+}
+
+.error {
+    color: #BB0000;
+    font-weight: bold;
+}
+
+.readonly {
+    color: #AAAAAA;
+    cursor: default;
+}
+
+a {
+    color: #4444CC;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #FFC90E;
+    text-decoration: underline;
+}
+
+body {
+    background-image: url("../Images/PageBackground.png");
+    background-position: left top;
+    background-repeat: repeat-x;
+    font-family: arial, sans-serif;
+    font-size: 16px;
+    margin: 0px;
+}
+
+form {
+    margin: 0px;
+}
+
+img {
+    border-style: none;
+}
+
+h1 {
+    color: #333399;
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0px;
+}
+
+h2 {
+    color: #333333;
+    font-size: 20px;
+    font-weight: bold;
+    margin: 0px;
+}
+
+html {
+    background-color: #FFFFFF;
+}
