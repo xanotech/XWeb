@@ -18,6 +18,29 @@ var hashNavigator = {
 
 
 
+// Returns the hash (the text following the '#' or '#!' of the current URL).
+// If no there is no hash, the defaultHash is returned.  The onHashchange
+// method uses this method when calling loadHashPage.
+hashNavigator.getHash = function() {
+    var hash = window.location.hash;
+
+    // Strip off the initial '#' if present
+    if (hash.charAt(0) == '#')
+        hash = hash.substring(1);
+
+    // Strip off the '!' if present as well (this is to support Googlebot)
+    if (hash.charAt(0) == '!')
+        hash = hash.substring(1);
+
+    // If a hash is not present, then use the defaultHash
+    if (!hash)
+        hash = hashNavigator.defaultHash;
+
+    return hash;
+} // end function
+
+
+
 // By default, this method is called by onHashchange whenever the hash
 // changes.  It requests whatever is listed in the hash and applies the result
 // to the tag specified by contentId and calls afterHashchange if it is defined.
@@ -45,21 +68,7 @@ hashNavigator.loadHashPage = function(hash) {
 // By default, this method is called whenever the value of the hash changes,
 // parses out the content of the hash and calls loadHashPage.
 hashNavigator.onHashchange = function() {
-    var hash = window.location.hash;
-
-    // If a hash is not present, then use the defaultHash
-    if (location.href.indexOf("#") == -1)
-        hash = hashNavigator.defaultHash;
-
-    // Strip off the initial '#' if present
-    if (hash.charAt(0) == '#')
-        hash = hash.substring(1);
-
-    // Strip off the '!' if present as well (this is to support Googlebot)
-    if (hash.charAt(0) == '!')
-        hash = hash.substring(1);
-
-    hashNavigator.loadHashPage(hash);
+    hashNavigator.loadHashPage(hashNavigator.getHash());
 } // end function
 
 
