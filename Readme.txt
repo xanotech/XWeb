@@ -11,6 +11,9 @@ Put these settings among the other <ItemGroup> nodes...
     <Content Include="..\..\..\XanotechWeb\**\*.js">
       <Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
     </Content>
+    <Content Include="..\..\..\XanotechWeb\**\*.png">
+      <Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 
 
