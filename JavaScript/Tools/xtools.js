@@ -1,3 +1,31 @@
+Date.prototype.is = function(date) {
+    return this.getTime() == date.getTime();
+} // end if
+
+
+
+// Returns the name of a function as initially defined.
+Function.prototype.getName = function() {
+    var funcString = this.toString();
+    var start = funcString.indexOf('function') + 9;
+    var end = funcString.indexOf('(');
+    var name = $.trim(funcString.substring(start, end));
+    return name;
+} // end function
+
+
+
+Object.isBasic = function(obj) {
+    var typeofObj = typeof obj;
+    if (typeofObj == 'undefined' || obj == null)
+        return false;
+
+    return obj.constructor == String || obj.constructor == Number ||
+        obj.constructor == Boolean || obj.constructor == Date;
+} // end function
+
+
+
 String.prototype.contains = String.prototype.contains || function(str) {
     return this.indexOf(str) != -1;
 } // end function
@@ -22,7 +50,7 @@ String.prototype.is = function(str) {
 
 
 
-String.prototype.startsWith = String.prototype.contains || function(str) {
+String.prototype.startsWith = String.prototype.startsWith || function(str) {
     if (this == '' || !str) return false;
     var index = this.indexOf(str);
     return index == 0;

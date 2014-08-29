@@ -1,22 +1,15 @@
-jquery-X.X.X.js
-(jquery.com)
-------------
-'nuff said.
+Google Hosted Libraries
+(developers.google.com/speed/libraries)
+---------------------------------------
+Use these instead of downloading JS files or installing them via NuGet or Gradle
 
 
-jquery-ui-X.X.X.js
-(jqueryui.com)
+Nuget Packages
 --------------
-jQuery's better looking counterpart.
-
-
-jquery.ba-hashchange.js
-(benalman.com/projects/jquery-hashchange-plugin)
-------------------------------------------------
-A jQuery plugin to support hashchange event...
-    $(window).hashchange(function() {...});
-NOTE: The file is not compatible with jQuery 1.9 and later.  The downloaded
-version has been fixed but does not match the published version.
+jQuery Cycle Plugin (jquery.malsup.com/cycle)
+jQuery hashchange event (benalman.com/projects/jquery-hashchange-plugin)
+Lo-Dash (lodash.com)
+Moment.js (momentjs.com)
 
 
 jquery.cookies.2.2.0.js
@@ -25,28 +18,10 @@ jquery.cookies.2.2.0.js
 A jQuery plugin that provides methods to get, set, and delete cookies.
 
 
-jquery.cycle.all.js
-(jquery.malsup.com/cycle)
--------------------------
-A jQuery plugin that provides automatic or event-driven image cycling.
-
-
-jquery.pngFix.js
-(jquery.andreaseberhard.de/pngFix)
-----------------------------------
-A jQuery plugin that fixes PNG transparency in Internet Explorer.
-
-
 jquery.simplyscroll.js
 (logicbox.net/jquery/simplyscroll)
 ----------------------------------
 A jQuery plugin that creates a marquee-like animated image scroller.
-
-
-lodash.js
-(lodash.com)
-------------
-A library with various useful low-level operations.
 
 
 purl.js
