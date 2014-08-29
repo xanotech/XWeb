@@ -287,10 +287,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 // method is a substitute for new with the difference being that properties
 // defined by the server will be present (although initialized to null).
 XRepository.JSRepository.prototype.create = function(type) {
-    if (typeof type != 'function')
-        throw 'Error in JSRepository.create: type parameter was not a function\n' +
-            '(typeof type = ' + typeof type + ', type = ' + JSON.stringify(type) + ').';
-
+    this._validateTypeParameter('type', type);
     var tableNames = this._getTableNames(type);
     var obj = new type();
     obj._tableNames = tableNames;
@@ -307,9 +304,7 @@ XRepository.JSRepository.prototype.create = function(type) {
 
 
 XRepository.JSRepository.prototype.find = function(type, criteria) {
-    if (typeof type != 'function')
-        throw 'Error in JSRepository.find: type parameter was not a function\n' +
-            '(typeof type = ' + typeof type + ', type = ' + JSON.stringify(type) + ').';
+    this._validateTypeParameter('type', type);
 
     // If criteria is a function, go ahead and call it (the caller must be
     // trying to do something clever).  But if its still a function after that,
@@ -340,7 +335,7 @@ XRepository.JSRepository.prototype.find = function(type, criteria) {
         criteria = [criteria];
 
     if (criteria instanceof Array)
-        this._validateCriterionArray('find', criteria);
+        this._validateCriterionArray(criteria);
     else
         criteria = XRepository.Criterion.create(criteria);
     return new XRepository.Cursor(type, criteria, this);
@@ -350,6 +345,46 @@ XRepository.JSRepository.prototype.find = function(type, criteria) {
 
 XRepository.JSRepository.prototype.findOne = function(type, criteria) {
     return this.find(type, criteria).limit(1).next();
+} // end method
+
+
+
+XRepository.JSRepository.prototype.mapOneToMany = function(one, many, foreignKeyName, methodName) {
+    this._validateTypeParameter('one', one);
+    this._validateTypeParameter('many', many);
+
+    var idColumn = this._getIdColumn(one);
+    if (!foreignKeyName)
+        foreignKeyName = one.getName() + idColumn;
+
+    if (!methodName) {
+        methodName = many.getName();
+        if (owl && owl.pluralize)
+            methodName = owl.pluralize(methodName);
+        else {
+            if (methodName.endsWith('s'))
+                methodName += 'es';
+            else
+                methodName += 's';
+        } // end if
+        methodName = 'get' + methodName;
+    } // end if
+
+    var repo = this;
+    one.prototype[methodName] = function() {
+        console.log('_' + methodName);
+        var objects = this['_' + methodName];
+        console.log(JSON.stringify(objects));
+        if (objects)
+            return objects;
+
+        var criteria = {};
+        criteria[foreignKeyName] = this[idColumn];
+        console.log(JSON.stringify(criteria));
+        objects = repo.find(many, criteria).toArray();
+        this['_' + methodName] = objects;
+        return objects;
+    } // end method
 } // end method
 
 
@@ -367,7 +402,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     if (!(objects instanceof Array))
         objects = [objects];
 
-    this._validateEntityArray('save', objects);
+    this._validateEntityArray(objects);
     this._applyTableNames(objects);
     objects = this._removeExtraneousProperties(objects);
     var request = $.ajax(this.path.root + '/' + this.path.remove, {
@@ -392,7 +427,7 @@ XRepository.JSRepository.prototype.save = function(objects) {
     if (!(objects instanceof Array))
         objects = [objects];
 
-    this._validateEntityArray('save', objects);
+    this._validateEntityArray(objects);
     this._applyTableNames(objects);
     var cleanObjects = this._removeExtraneousProperties(objects);
     //this._adjustDateTimezones(cleanObjects);
@@ -610,27 +645,27 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
 
 
 
-XRepository.JSRepository.prototype._validateCriterionArray = function(methodName, array) {
+XRepository.JSRepository.prototype._validateCriterionArray = function(array) {
     $.each(array, function(index, element) {
         if (element instanceof XRepository.Criterion)
             return;
         if (!element['Name'] || !element['Operation'])
-            throw 'Error in JSRepository.' + methodName + ': element ' + index +
+            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
                 ' in criteria array missing Name and / or Operation properties\n' +
                 '(element = ' + JSON.stringify(element) + ').';
     });
 } // end method
 
 
-XRepository.JSRepository.prototype._validateEntityArray = function(methodName, objects) {
+XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
     $.each(objects, function(index, obj) {
         if (Object.isBasic(obj))
-            throw 'Error in JSRepository.' + methodName + ': element ' + index + ' in objects' +
+            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index + ' in objects' +
                 'array parameter cannot be a basic type but must instead be an entity object\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
         else if (!obj)
-            throw 'Error in JSRepository.' + methodName + ': element ' + index +
+            throw 'Error in JSRepository.' + methodName.callee.caller.getName() + ': element ' + index +
                 ' in objects array parameter is null or undefined\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
@@ -650,6 +685,16 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest) {
         } // end try-catch
         throw error;
     } // end if
+} // end method
+
+
+
+XRepository.JSRepository.prototype._validateTypeParameter = function(parameterName, parameter) {
+    if (!parameter || parameter.constructor != Function)
+        throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': ' + parameterName +
+            ' parameter was not initialized or was not a function\n' +
+            '(typeof ' + parameterName + ' = ' + typeof parameter +
+            ', ' + parameterName + ' = ' + JSON.stringify(parameter) + ').';
 } // end method
 
 

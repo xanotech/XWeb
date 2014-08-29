@@ -24,6 +24,12 @@ jquery.simplyscroll.js
 A jQuery plugin that creates a marquee-like animated image scroller.
 
 
+js-plural
+(oranlooney.com/js-plural)
+--------------------------
+A library used for making words plural or singular.
+
+
 purl.js
 (github.com/allmarkedup/purl)
 -----------------------------
