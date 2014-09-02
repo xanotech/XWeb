@@ -139,7 +139,7 @@ XRepository.Cursor.prototype.count = function(applySkipLimit) {
     if (applySkipLimit) {
         return this.toArray().length;
     } else
-        return this.repository.Count<T>(this.cursorData.criteria);
+        return this.repository.count(this.type, this.cursorData.criteria);
 } // end method
 
 
@@ -275,8 +275,18 @@ XRepository.JSRepository = function(path, isSynchronized) {
     this.path.remove = 'Remove';
     this.path.save = 'Save';
 
-    if (!isSynchronized)
+
+    if (isSynchronized)
+        this.sync = this;
+    else {
         this.sync = new XRepository.JSRepository(path, true);
+        this.sync.path = this.path;
+    } // end method
+} // end class
+
+
+
+XRepository.JSRepository.prototype.count = function(type, criteria) {
 } // end class
 
 
@@ -349,16 +359,12 @@ XRepository.JSRepository.prototype.findOne = function(type, criteria) {
 
 
 
-XRepository.JSRepository.prototype.mapOneToMany = function(one, many, foreignKeyName, methodName) {
-    this._validateTypeParameter('one', one);
-    this._validateTypeParameter('many', many);
-
-    var idColumn = this._getIdColumn(one);
-    if (!foreignKeyName)
-        foreignKeyName = one.getName() + idColumn;
+XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, methodName) {
+    this._validateTypeParameter('source', source);
+    this._validateTypeParameter('target', target);
 
     if (!methodName) {
-        methodName = many.getName();
+        methodName = target.getName();
         if (owl && owl.pluralize)
             methodName = owl.pluralize(methodName);
         else {
@@ -371,19 +377,47 @@ XRepository.JSRepository.prototype.mapOneToMany = function(one, many, foreignKey
     } // end if
 
     var repo = this;
-    one.prototype[methodName] = function() {
-        console.log('_' + methodName);
+    source.prototype[methodName] = function() {
         var objects = this['_' + methodName];
-        console.log(JSON.stringify(objects));
         if (objects)
             return objects;
 
         var criteria = {};
-        criteria[foreignKeyName] = this[idColumn];
-        console.log(JSON.stringify(criteria));
-        objects = repo.find(many, criteria).toArray();
+        if (!foreignKey)
+            foreignKey = repo._findForeignKeyColumn(source, target);
+        criteria[foreignKey] = this[repo._getIdColumn(source)];
+        objects = repo.sync.find(target, criteria).toArray();
         this['_' + methodName] = objects;
         return objects;
+    } // end method
+} // end method
+
+
+
+XRepository.JSRepository.prototype.mapSingleReference = function(source, target, foreignKeyName, methodName) {
+    this._validateTypeParameter('source', source);
+    this._validateTypeParameter('target', target);
+
+    var idColumn = this._getIdColumn(target);
+    if (!foreignKeyName)
+        foreignKeyName = target.getName() + idColumn;
+
+    if (!methodName) {
+        methodName = target.getName();
+        methodName = 'get' + methodName;
+    } // end if
+
+    var repo = this;
+    source.prototype[methodName] = function() {
+        var objects = this['_' + methodName];
+        if (objects)
+            return objects[0] || null;
+
+        var criteria = {};
+        criteria[idColumn] = this[foreignKeyName];
+        var objects = repo.sync.find(target, criteria).toArray();
+        this['_' + methodName] = objects;
+        return objects[0] || null;
     } // end method
 } // end method
 
@@ -406,12 +440,15 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     this._applyTableNames(objects);
     objects = this._removeExtraneousProperties(objects);
     var request = $.ajax(this.path.root + '/' + this.path.remove, {
-        async: false,
+        async: !this.isSynchronized,
         cache: false,
         data: { data: JSON.stringify(objects) },
         type: 'POST'
     });
-    repository._validateResponse(request)
+    var repo = this;
+    return this._handleResponse(request, function() {
+        repo._validateResponse(request);
+    });
 } // end method
 
 
@@ -430,35 +467,18 @@ XRepository.JSRepository.prototype.save = function(objects) {
     this._validateEntityArray(objects);
     this._applyTableNames(objects);
     var cleanObjects = this._removeExtraneousProperties(objects);
-    //this._adjustDateTimezones(cleanObjects);
     var request = $.ajax(this.path.root + '/' + this.path.save, {
-        async: false,
+        async: !this.isSynchronized,
         cache: false,
         data: { data: JSON.stringify(cleanObjects) },
         type: 'POST'
     });
-    this._validateResponse(request);
-    var ids = JSON.parse(request.responseText);
-    this._applyIds(objects, ids);
-} // end method
-
-
-
-XRepository.JSRepository.prototype._adjustDateTimezones = function(objects) {
-    $.each(objects, function(index, obj) {
-        $.each(obj, function(property, value) {
-            if (!value)
-                return true;
-            var type = value.constructor;
-            if (!type)
-                return true;
-            if (value.constructor != Date)
-                return true;
-
-            value = new Date(value.getTime());
-            value.setHours(value.getHours() - value.getTimezoneOffset() / 60);
-            obj[property] = value;
-        });
+    var repo = this;
+    return this._handleResponse(request, function() {
+        repo._validateResponse(request);
+        var ids = JSON.parse(request.responseText);
+        repo._applyIds(objects, ids);
+        return objects;
     });
 } // end method
 
@@ -506,18 +526,66 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
         criterion._fixOperation();
     });
     var request = $.ajax(this.path.root + '/' + this.path.fetch, {
-        async: false,
+        async: !this.isSynchronized,
         cache: false,
         data: {
             tableNames: JSON.stringify(this._getTableNames(cursor.type)),
             cursor: JSON.stringify(cursor.cursorData)
         }
     });
-    this._validateResponse(request);
-    var objs = JSON.parse(request.responseText);
-    this._convert(objs, cursor.type);
-    this._fixDates(objs);
-    return objs;
+    var repo = this;
+    return this._handleResponse(request, function() {
+        repo._validateResponse(request);
+        var objs = JSON.parse(request.responseText);
+        repo._convert(objs, cursor.type);
+        repo._fixDates(objs);
+        return objs;
+    });
+} // end method
+
+
+
+XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
+    if (!columnName)
+        return null;
+
+    columnName = columnName.toUpperCase();
+    var columns = this._getColumns(type.getName());
+    var result = null;
+    $.each(columns, function(index, column) {
+        if (column.toUpperCase() == columnName) {
+            result = column;
+            return false;
+        } // end if
+    });
+    return result;
+} // end method
+
+
+
+XRepository.JSRepository.prototype._findForeignKeyColumn = function(referencedType, referencingType) {
+    var idColumn = this._getIdColumn(referencedType);
+    var vanillaIdColumn = idColumn;
+
+    // If the idColumn without any table names is the same as vanilla idColumn,
+    // then they key name is "simple" (like "Id" or "Code").  Simple names
+    // cannot be trusted so only check for columns with the referenedType's name
+    // combined with the simple name instead of the vanilla idColumn.
+    var tableNames = this._getTableNames(referencedType);
+    var repo = this;
+    $.each(tableNames, function(index, tableName) {
+        var tableDef = repo._getTableDefinition(tableName);
+        tableName = tableDef.TableName;
+        idColumn = idColumn.removeIgnoreCase(tableName);
+    });
+    var isSimpleKey = idColumn == vanillaIdColumn;
+    if (!isSimpleKey) {
+        var column = this._findColumn(referencingType, vanillaIdColumn);
+        if (column)
+            return column;
+    } // end if
+
+    return this._findColumn(referencingType, referencedType.getName() + idColumn);
 } // end method
 
 
@@ -608,6 +676,20 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
     } // end while
     tableNames.reverse();
     return tableNames;
+} // end method
+
+
+
+XRepository.JSRepository.prototype._handleResponse = function(request, handle) {
+    if (this.isSynchronized)
+        return handle();
+    else {
+        var deferred = $.Deferred();
+        request.done(function() {
+            deferred.resolve(handle());
+        });
+        return deferred.promise();
+    } // end if-else
 } // end method
 
 
