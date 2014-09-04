@@ -27,7 +27,7 @@ XRepository.Criterion = function() {
             this.Operation = arguments[1];
             this.Value = arguments[2];
     } // end switch
-} // end class
+} // end function
 
 
 
@@ -37,7 +37,7 @@ XRepository.Criterion.create = function(obj) {
         array.push(new XRepository.Criterion(property, value));
     });
     return array;
-} // end method
+} // end function
 
 
 
@@ -86,7 +86,7 @@ XRepository.Criterion.prototype._fixOperation = function() {
             throw new FormatException("OperationType string \"" + str + "\" is invalid.  " +
                 "Acceptable values are: =, >, >=, <, <=, !=, LIKE, NOT LIKE (== and <> are also accepted).");
     } // end switch
-} // end method
+} // end function
 
 
 
@@ -101,7 +101,7 @@ XRepository.Cursor = function(type, criteria, repository) {
     this.cursorData.limit = null;
     this.cursorData.skip = null;
     this.cursorData.sort = null;
-} // end class
+} // end function
 
 
 
@@ -110,7 +110,7 @@ XRepository.Cursor.prototype.count = function(applySkipLimit) {
         return this.toArray().length;
     } else
         return this.repository.count(this.type, this.cursorData.criteria);
-} // end method
+} // end function
 
 
 
@@ -118,19 +118,26 @@ XRepository.Cursor.prototype.forEach = function(callback) {
     if (typeof callback != 'function')
         return;
 
-    var result = this.toArray();
-    if (result.constructor == jQuery.Deferred)
-        jQuery.each(this.toArray(), function(index, element) {
-            callback(element);
+    function performForEach(objects) {
+        jQuery.each(objects, function(index, obj) {
+            callback(obj);
         });
-} // end method
+    } // end function
+
+    var result = this.toArray();
+    if (XRepository.isPromise(result))
+        result.done(performForEach);
+    else
+        performForEach(result);
+} // end function
 
 
 
 XRepository.Cursor.prototype.hasNext = function() {
-    this.toArray(); // Ensures that data and index are initialized
-    return this.index < this.size();
-} // end method
+    var size = this.size();
+    if (size)
+        return this.index < size;
+} // end function
 
 
 
@@ -143,32 +150,55 @@ XRepository.Cursor.prototype.limit = function(rows) {
         rows = null;
     this.cursorData.limit = rows;
     return this;
-} // end method
+} // end function
 
 
 
-XRepository.Cursor.prototype.map = function() {
+XRepository.Cursor.prototype.map = function(callback) {
     if (typeof callback != 'function')
         return;
 
-    var array = [];
-    jQuery.each(this.toArray(), function(index, element) {
-        array.push(callback(element));
-    });
-    return array;
-} // end method
+    function performMap(objects) {
+        var array = [];
+        jQuery.each(objects, function(index, obj) {
+            array.push(callback(obj));
+        });
+        return array;
+    } // end function
+
+    var result = this.toArray();
+    if (XRepository.isPromise(result)) {
+        var deferred = jQuery.Deferred();
+        result.done(function(objects) {
+            deferred.resolve(performMap(objects));
+        });
+        return deferred.promise();
+    } else
+        return performMap(result);
+} // end function
 
 
 
 XRepository.Cursor.prototype.next = function() {
-    return this.hasNext() ? this.toArray()[this.index] : null;
-} // end method
+    if (!this.hasNext())
+        return;
+
+    var array = this.toArray();
+    if (XRepository.isPromise(array))
+        array = array.array;
+    if (array)
+        return array[this.index++];
+} // end function
 
 
 
 XRepository.Cursor.prototype.size = function() {
-    return this.toArray().length;
-} // end method
+    var array = this.toArray();
+    if (XRepository.isPromise(array))
+        array = array.array;
+    if (array)
+        return array.length;
+} // end function
 
 
 
@@ -181,7 +211,7 @@ XRepository.Cursor.prototype.skip = function(rows) {
         rows = null;
     this.cursorData.skip = rows;
     return this;
-} // end method
+} // end function
 
 
 
@@ -213,17 +243,22 @@ XRepository.Cursor.prototype.sort = function(sortObj) {
         });
     this.cursorData.sort = sortObj;
     return this;
-} // end method
+} // end function
 
 
 
 XRepository.Cursor.prototype.toArray = function() {
     if (this.data == null) {
-        this.data = this.repository._fetch(this);
+        var result = this.repository._fetch(this);
+        if (XRepository.isPromise(result))
+            result.done(function(array) {
+                result.array = array;
+            });
+        this.data = result;
         this.index = 0;
     } // end if
-    return this.data
-} // end method
+    return this.data;
+} // end function
 
 
 
@@ -253,7 +288,7 @@ XRepository.Cursor.prototype._validateSortObj = function(sortObj) {
             'or an object where properties are numbers\n' +
             '(typeof sortObj = ' + typeof sortObj + ', sortObj = ' + JSON.stringify(sortObj) + ').';
     return sortObj;
-} // end method
+} // end function
 
 
 
@@ -288,12 +323,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
     this[selfProperty] = this;
     this[altProperty] = new XRepository.JSRepository(path, false);
     this[altProperty].path = this.path;
-} // end class
+} // end function
 
 
 
 XRepository.JSRepository.prototype.count = function(type, criteria) {
-} // end class
+} // end function
 
 
 
@@ -315,7 +350,7 @@ XRepository.JSRepository.prototype.create = function(type) {
         });
     });
     return obj;
-} // end method
+} // end function
 
 
 
@@ -355,13 +390,21 @@ XRepository.JSRepository.prototype.find = function(type, criteria) {
     else
         criteria = XRepository.Criterion.create(criteria);
     return new XRepository.Cursor(type, criteria, this);
-} // end method
+} // end function
 
 
 
 XRepository.JSRepository.prototype.findOne = function(type, criteria) {
-    return this.find(type, criteria).limit(1).next();
-} // end method
+    var result = this.find(type, criteria).limit(1).toArray();
+    if (XRepository.isPromise(result)) {
+        var deferred = jQuery.Deferred();
+        result.done(function(objects) {
+            deferred.resolve(objects[0] || null);
+        });
+        return deferred.promise();
+    } else
+        return result[0] || null;
+} // end function
 
 
 
@@ -395,8 +438,8 @@ XRepository.JSRepository.prototype.mapMultipleReference = function(source, targe
         objects = repo.sync.find(target, criteria).toArray();
         this['_' + methodName] = objects;
         return objects;
-    } // end method
-} // end method
+    } // end function
+} // end function
 
 
 
@@ -422,8 +465,8 @@ XRepository.JSRepository.prototype.mapSingleReference = function(source, target,
         var objects = repo.sync.find(target, criteria).toArray();
         this['_' + methodName] = objects;
         return objects[0] || null;
-    } // end method
-} // end method
+    } // end function
+} // end function
 
 
 
@@ -453,7 +496,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     return this._handleResponse(request, function() {
         repo._validateResponse(request);
     });
-} // end method
+} // end function
 
 
 
@@ -484,7 +527,7 @@ XRepository.JSRepository.prototype.save = function(objects) {
         repo._applyIds(objects, ids);
         return objects;
     });
-} // end method
+} // end function
 
 
 
@@ -499,7 +542,7 @@ XRepository.JSRepository.prototype._applyIds = function(objects, ids) {
             obj[property] = value;
         });
     });
-} // end method
+} // end function
 
 
 
@@ -509,7 +552,7 @@ XRepository.JSRepository.prototype._applyTableNames = function(objects) {
         if (!obj._tableNames)
             obj._tableNames = repo._getTableNames(obj.constructor);
     });
-} // end method
+} // end function
 
 
 
@@ -521,7 +564,7 @@ XRepository.JSRepository.prototype._convert = function(objects, type) {
         });
         objects[index] = newObject;
     });
-} // end method
+} // end function
 
 
 
@@ -545,7 +588,7 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
         repo._fixDates(objs);
         return objs;
     });
-} // end method
+} // end function
 
 
 
@@ -563,7 +606,7 @@ XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
         } // end if
     });
     return result;
-} // end method
+} // end function
 
 
 
@@ -572,9 +615,9 @@ XRepository.JSRepository.prototype._findForeignKeyColumn = function(referencedTy
     var vanillaIdColumn = idColumn;
 
     // If the idColumn without any table names is the same as vanilla idColumn,
-    // then they key name is "simple" (like "Id" or "Code").  Simple names
-    // cannot be trusted so only check for columns with the referenedType's name
-    // combined with the simple name instead of the vanilla idColumn.
+    // then they key name is "simple" (like "Id" or "Code").  If that's the case
+    // then only check for referencingType columns if the simple idColumn does
+    // not match the idColumn of the referencingType.
     var tableNames = this._getTableNames(referencedType);
     var repo = this;
     jQuery.each(tableNames, function(index, tableName) {
@@ -582,15 +625,15 @@ XRepository.JSRepository.prototype._findForeignKeyColumn = function(referencedTy
         tableName = tableDef.TableName;
         idColumn = idColumn.removeIgnoreCase(tableName);
     });
-    var isSimpleKey = idColumn == vanillaIdColumn;
-    if (!isSimpleKey) {
+    if (idColumn != vanillaIdColumn ||
+        idColumn != this._getIdColumn(referencingType)) {
         var column = this._findColumn(referencingType, vanillaIdColumn);
         if (column)
             return column;
     } // end if
 
     return this._findColumn(referencingType, referencedType.getName() + idColumn);
-} // end method
+} // end function
 
 
 
@@ -617,7 +660,7 @@ XRepository.JSRepository.prototype._fixDates = function(objects) {
             } // end if-else
         });
     });
-} // end method
+} // end function
 
 
 
@@ -635,13 +678,13 @@ XRepository.JSRepository.prototype._getCachedValue = function(cache, tableName, 
     this._validateResponse(request);
     cache[tableName] = JSON.parse(request.responseText);
     return cache[tableName];
-} // end method
+} // end function
 
 
 
 XRepository.JSRepository.prototype._getColumns = function(tableName) {
     return this._getCachedValue(this._columnsCache, tableName, this.path.getColumns);
-} // end method
+} // end function
 
 
 
@@ -654,19 +697,19 @@ XRepository.JSRepository.prototype._getIdColumn = function(type) {
     if (columns.length != 1)
         return null;
     return columns[0];
-} // end method
+} // end function
 
 
 
 XRepository.JSRepository.prototype._getPrimaryKeys = function(tableName) {
     return this._getCachedValue(this._primaryKeysCache, tableName, this.path.getPrimaryKeys);
-} // end method
+} // end function
 
 
 
 XRepository.JSRepository.prototype._getTableDefinition = function(tableName) {
     return this._getCachedValue(this._tableDefinitionCache, tableName, this.path.getTableDefinition);
-} // end method
+} // end function
 
 
 
@@ -680,7 +723,7 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
     } // end while
     tableNames.reverse();
     return tableNames;
-} // end method
+} // end function
 
 
 
@@ -694,7 +737,7 @@ XRepository.JSRepository.prototype._handleResponse = function(request, handle) {
         });
         return deferred.promise();
     } // end if-else
-} // end method
+} // end function
 
 
 
@@ -727,7 +770,7 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
         newObjs.push(newObj);
     });
     return newObjs;
-} // end method
+} // end function
 
 
 
@@ -740,7 +783,7 @@ XRepository.JSRepository.prototype._validateCriterionArray = function(array) {
                 ' in criteria array missing Name and / or Operation properties\n' +
                 '(element = ' + JSON.stringify(element) + ').';
     });
-} // end method
+} // end function
 
 
 XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
@@ -756,7 +799,7 @@ XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
     });
-} // end method
+} // end function
 
 
 
@@ -771,17 +814,25 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest) {
         } // end try-catch
         throw error;
     } // end if
-} // end method
+} // end function
 
 
 
 XRepository.JSRepository.prototype._validateTypeParameter = function(parameterName, parameter) {
-    if (!parameter || parameter.constructor != Function)
+    if (typeof parameter != 'function')
         throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': ' + parameterName +
             ' parameter was not initialized or was not a function\n' +
             '(typeof ' + parameterName + ' = ' + typeof parameter +
             ', ' + parameterName + ' = ' + JSON.stringify(parameter) + ').';
-} // end method
+} // end function
+
+
+
+XRepository.isPromise = function(obj) {
+    return (obj &&
+        typeof obj.done == 'function' &&
+        typeof obj.promise == 'function')
+} // end function
 
 
 
