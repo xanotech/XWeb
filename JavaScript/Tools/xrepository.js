@@ -91,6 +91,39 @@ XRepository.Criterion.prototype._fixOperation = function() {
 
 
 XRepository.Cursor = function(type, criteria, repository) {
+    // If criteria is a function, go ahead and call it (the caller must be
+    // trying to do something clever).  But if its still a function after that,
+    // just set criteria to null because functions just won't cut it as criteria.
+    if (typeof criteria == 'function')
+        criteria = criteria();
+    if (typeof criteria == 'function')
+        criteria = null;
+
+    if (Object.isBasic(criteria)) {
+        var idColumn = repository._getIdColumn(type);
+        if (!idColumn) {
+            var value = '' + criteria;
+            if (criteria.constructor == String || criteria.constructor == Date)
+                value = '"' + value + '"';
+            var methodName = arguments.callee.caller.getName();
+            throw 'Error in JSRepository.' + methodName + ': ' + methodName + '(' +
+                type.getName() + ', ' + JSON.stringify(value) +
+                ') method cannot be used for ' + type.getName() +
+                ' because does not have a single column primary key.';
+        } // end if
+        criteria = new XRepository.Criterion(idColumn, criteria);
+    } // end if
+
+    if (!criteria)
+        criteria = [];
+    if (criteria instanceof XRepository.Criterion)
+        criteria = [criteria];
+
+    if (criteria instanceof Array)
+        this._validateCriterionArray(criteria);
+    else
+        criteria = XRepository.Criterion.create(criteria);
+
     this.type = type;
     this.repository = repository;
     this.data = null;
@@ -107,7 +140,15 @@ XRepository.Cursor = function(type, criteria, repository) {
 
 XRepository.Cursor.prototype.count = function(applySkipLimit) {
     if (applySkipLimit) {
-        return this.toArray().length;
+        var result = this.toArray();
+        if (XRepository.isPromise(result)) {
+            var deferred = jQuery.Deferred();
+            result.done(function(objects) {
+                deferred.resolve(objects.length);
+            });
+            return deferred.promise();
+        } else
+            return result.length;
     } else
         return this.repository.count(this.type, this.cursorData.criteria);
 } // end function
@@ -262,6 +303,19 @@ XRepository.Cursor.prototype.toArray = function() {
 
 
 
+XRepository.Cursor.prototype._validateCriterionArray = function(array) {
+    jQuery.each(array, function(index, element) {
+        if (element instanceof XRepository.Criterion)
+            return;
+        if (!element['Name'] || !element['Operation'])
+            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
+                ' in criteria array missing Name and / or Operation properties\n' +
+                '(element = ' + JSON.stringify(element) + ').';
+    });
+} // end function
+
+
+
 XRepository.Cursor.prototype._validateSortObj = function(sortObj) {
     if (!sortObj)
         return sortObj;
@@ -307,6 +361,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     // Setup default paths
     this.path = {};
     this.path.root = path;
+    this.path.count = 'Count';
     this.path.fetch = 'Fetch';
     this.path.getColumns = 'GetColumns';
     this.path.getPrimaryKeys = 'GetPrimaryKeys';
@@ -328,6 +383,25 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
 XRepository.JSRepository.prototype.count = function(type, criteria) {
+    this._validateTypeParameter('type', type);
+    var cursor = new XRepository.Cursor(type, criteria, this)
+
+    jQuery.each(cursor.cursorData.criteria, function(index, criterion) {
+        criterion._fixOperation();
+    });
+    var request = jQuery.ajax(this.path.root + '/' + this.path.count, {
+        async: !this.isSynchronized,
+        cache: false,
+        data: {
+            tableNames: JSON.stringify(this._getTableNames(cursor.type)),
+            cursor: JSON.stringify(cursor.cursorData)
+        }
+    });
+    var repo = this;
+    return this._handleResponse(request, function() {
+        repo._validateResponse(request);
+        return JSON.parse(request.responseText);
+    });
 } // end function
 
 
@@ -356,39 +430,6 @@ XRepository.JSRepository.prototype.create = function(type) {
 
 XRepository.JSRepository.prototype.find = function(type, criteria) {
     this._validateTypeParameter('type', type);
-
-    // If criteria is a function, go ahead and call it (the caller must be
-    // trying to do something clever).  But if its still a function after that,
-    // just set criteria to null because functions just won't cut it as criteria.
-    if (typeof criteria == 'function')
-        criteria = criteria();
-    if (typeof criteria == 'function')
-        criteria = null;
-
-    if (Object.isBasic(criteria)) {
-        var idColumn = this._getIdColumn(type);
-        if (!idColumn) {
-            var value = '' + criteria;
-            if (criteria.constructor == String || criteria.constructor == Date)
-                value = '"' + value + '"';
-            throw 'Error in JSRepository.find: find(' +
-                type.getName() + ', ' + JSON.stringify(value) +
-                ') method cannot be used for ' + type.getName() +
-                ' because does not have a single column primary key.';
-        } // end if
-        criteria = new XRepository.Criterion(idColumn, criteria);
-    } // end if
-
-    if (!criteria)
-        criteria = [];
-
-    if (criteria instanceof XRepository.Criterion)
-        criteria = [criteria];
-
-    if (criteria instanceof Array)
-        this._validateCriterionArray(criteria);
-    else
-        criteria = XRepository.Criterion.create(criteria);
     return new XRepository.Cursor(type, criteria, this);
 } // end function
 
@@ -478,8 +519,18 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     if (!objects)
         return;
 
-    if (objects instanceof XRepository.Cursor)
+    if (objects instanceof XRepository.Cursor) {
         objects = objects.toArray();
+        if (XRepository.isPromise(objects)) {
+            var repo = this;
+            var deferred = jQuery.Deferred();
+            objects.done(function(objs) {
+                repo.remove(objs).done(deferred.resolve);
+            });
+            return deferred.promise();
+        } // end if
+    } // end if
+
     if (!(objects instanceof Array))
         objects = [objects];
 
@@ -507,6 +558,18 @@ XRepository.JSRepository.prototype.save = function(objects) {
             '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').';
     if (!objects)
         return;
+
+    if (objects instanceof XRepository.Cursor) {
+        objects = objects.toArray();
+        if (XRepository.isPromise(objects)) {
+            var repo = this;
+            var deferred = jQuery.Deferred();
+            objects.done(function(objs) {
+                repo.save(objs).done(deferred.resolve);
+            });
+            return deferred.promise();
+        } // end if
+    } // end if
 
     if (!(objects instanceof Array))
         objects = [objects];
@@ -774,18 +837,6 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
 
 
 
-XRepository.JSRepository.prototype._validateCriterionArray = function(array) {
-    jQuery.each(array, function(index, element) {
-        if (element instanceof XRepository.Criterion)
-            return;
-        if (!element['Name'] || !element['Operation'])
-            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
-                ' in criteria array missing Name and / or Operation properties\n' +
-                '(element = ' + JSON.stringify(element) + ').';
-    });
-} // end function
-
-
 XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
     jQuery.each(objects, function(index, obj) {
         if (Object.isBasic(obj))
@@ -794,7 +845,7 @@ XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
         else if (!obj)
-            throw 'Error in JSRepository.' + methodName.callee.caller.getName() + ': element ' + index +
+            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
                 ' in objects array parameter is null or undefined\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
