@@ -41,7 +41,7 @@ String.prototype.endsWith = String.prototype.endsWith || function(str) {
 
 
 
-String.prototype.is = function(str) {
+String.prototype.is = String.prototype.is || function(str) {
     if (!_(str).isString())
         str = str.toString();
     return this.toUpperCase() == str.toUpperCase();
@@ -49,19 +49,19 @@ String.prototype.is = function(str) {
 
 
 
-String.prototype.remove = function(str) {
+String.prototype.remove = String.prototype.remove || function(str) {
     return this.replace(str, '');
 } // end function
 
 
 
-String.prototype.removeIgnoreCase = function(str) {
+String.prototype.removeIgnoreCase = String.prototype.removeIgnoreCase || function(str) {
     return this.replaceIgnoreCase(str, '');
 } // end function
 
 
 
-String.prototype.replaceIgnoreCase = function(oldValue, newValue) {
+String.prototype.replaceIgnoreCase = String.prototype.replaceIgnoreCase || function(oldValue, newValue) {
     if (!oldValue)
         return this;
 

@@ -45,7 +45,7 @@ hashNavigator.getHash = function() {
 // changes.  It requests whatever is listed in the hash and applies the result
 // to the tag specified by contentId and calls afterHashchange if it is defined.
 hashNavigator.loadHashPage = function(hash) {
-    $.get(hash).done(function(data) {
+    $.ajax({url: hash, cache: false}).done(function(data) {
         $('#' + hashNavigator.contentId).html(data);
     }).fail(function(xhr) {
         var text = xhr.responseText;

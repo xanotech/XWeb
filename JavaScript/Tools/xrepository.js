@@ -383,6 +383,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
 XRepository.JSRepository.prototype.count = function(type, criteria) {
+    XRepository._validateRequiredLibraries();
     this._validateTypeParameter('type', type);
     var cursor = new XRepository.Cursor(type, criteria, this)
 
@@ -412,6 +413,7 @@ XRepository.JSRepository.prototype.count = function(type, criteria) {
 // method is a substitute for new with the difference being that properties
 // defined by the server will be present (although initialized to null).
 XRepository.JSRepository.prototype.create = function(type) {
+    XRepository._validateRequiredLibraries();
     this._validateTypeParameter('type', type);
     var tableNames = this._getTableNames(type);
     var obj = new type();
@@ -429,6 +431,7 @@ XRepository.JSRepository.prototype.create = function(type) {
 
 
 XRepository.JSRepository.prototype.find = function(type, criteria) {
+    XRepository._validateRequiredLibraries();
     this._validateTypeParameter('type', type);
     return new XRepository.Cursor(type, criteria, this);
 } // end function
@@ -436,6 +439,7 @@ XRepository.JSRepository.prototype.find = function(type, criteria) {
 
 
 XRepository.JSRepository.prototype.findOne = function(type, criteria) {
+    XRepository._validateRequiredLibraries();
     var result = this.find(type, criteria).limit(1).toArray();
     if (XRepository.isPromise(result)) {
         var deferred = jQuery.Deferred();
@@ -450,6 +454,7 @@ XRepository.JSRepository.prototype.findOne = function(type, criteria) {
 
 
 XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, methodName) {
+    XRepository._validateRequiredLibraries();
     this._validateTypeParameter('source', source);
     this._validateTypeParameter('target', target);
 
@@ -485,6 +490,7 @@ XRepository.JSRepository.prototype.mapMultipleReference = function(source, targe
 
 
 XRepository.JSRepository.prototype.mapSingleReference = function(source, target, foreignKey, methodName) {
+    XRepository._validateRequiredLibraries();
     this._validateTypeParameter('source', source);
     this._validateTypeParameter('target', target);
 
@@ -512,6 +518,7 @@ XRepository.JSRepository.prototype.mapSingleReference = function(source, target,
 
 
 XRepository.JSRepository.prototype.remove = function(objects) {
+    XRepository._validateRequiredLibraries();
     if (Object.isBasic(objects))
         throw 'Error in JSRepository.remove: objects parameter cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
@@ -552,6 +559,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
 
 
 XRepository.JSRepository.prototype.save = function(objects) {
+    XRepository._validateRequiredLibraries();
     if (Object.isBasic(objects))
         throw 'Error in JSRepository.save: objects parameter cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
@@ -883,6 +891,28 @@ XRepository.isPromise = function(obj) {
     return (obj &&
         typeof obj.done == 'function' &&
         typeof obj.promise == 'function')
+} // end function
+
+
+
+XRepository._validateRequiredLibraries = function() {
+    if (typeof moment != 'function')
+        throw 'Error in JSRepository: moment.js does not appear to be referenced.  ' +
+            'xrepository.js requires moment.js.  Make sure it is referenced ' +
+            'before attempting to invoke any methods of JSRepository.';
+
+    // Validate XTools
+    if (!XRepository.JSRepository.getName)
+        throw 'Error in JSRepository: xtools.js does not appear to be referenced.  ' +
+            'xrepository.js requires xtools.js.  Make sure it is referenced ' +
+            'before attempting to invoke any methods of JSRepository.';
+
+    function getNameTest() {
+    } // end function
+    if (getNameTest.getName() != 'getNameTest')
+        throw 'Error in JSRepository: xtools.js appears to be malfunctioning.  ' +
+            'Please make sure there are no other libraries overwriting the functions ' +
+            'xtools.js declares.';
 } // end function
 
 
