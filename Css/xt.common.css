@@ -63,6 +63,12 @@
     vertical-align: top;
 }
 
+div.padded,
+table.padded th,
+table.padded td {
+    padding: 2px 4px 2px 4px;
+}
+
 table {
     border-collapse: collapse;
     font-size: inherit;
@@ -75,9 +81,4 @@ td, th {
     padding: 0px;
     margin: 0px;
     vertical-align: top;
-}
-
-table.padded th,
-table.padded td {
-    padding: 2px 4px 2px 4px;
 }

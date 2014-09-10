@@ -1,3 +1,13 @@
+/* xrepository JavaScript Library v0.1
+ * http://xrepository.com/
+ *
+ * Copyright 2014 Xanotech LLC
+ * Released under the MIT license
+ * http://xrepository.com/#!License.html
+ */
+
+
+
 var XRepository = {}; // Namespace object for all XRepository classes
 
 
