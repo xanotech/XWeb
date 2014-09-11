@@ -1,3 +1,12 @@
+/* xtools JavaScript Library v1.0
+ *
+ * Copyright 2014 Xanotech LLC
+ * Released under the MIT license
+ * http://opensource.org/licenses/MIT
+ */
+
+
+
 Date.prototype.is = function(date) {
     return this.getTime() == date.getTime();
 } // end function

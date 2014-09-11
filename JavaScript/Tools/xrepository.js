@@ -1,4 +1,4 @@
-/* xrepository JavaScript Library v0.1
+/* xrepository JavaScript Library v0.1.1
  * http://xrepository.com/
  *
  * Copyright 2014 Xanotech LLC
