@@ -6,8 +6,10 @@ Use these instead of downloading JS files or installing them via NuGet or Gradle
 
 Nuget Packages
 --------------
+Bootstrap (getbootstrap.com)
 jQuery Cycle Plugin (jquery.malsup.com/cycle)
 jQuery hashchange event (benalman.com/projects/jquery-hashchange-plugin)
+knockoutjs (knockoutjs.com)
 Lo-Dash (lodash.com)
 Moment.js (momentjs.com)
 
