@@ -14,6 +14,14 @@ Lo-Dash (lodash.com)
 Moment.js (momentjs.com)
 
 
+jquery.browser.js
+(github.com/hecticjeff/fancybox-rails/blob/master/vendor/assets/javascripts/jquery.browser.js)
+(stackoverflow.com/questions/15540835)
+--------------------------------------
+A shim that adds the "browser" method back to jQuery.  It is needed by jQuery
+hashchange event library.
+
+
 jquery.cookies.2.2.0.js
 (code.google.com/p/cookies)
 ---------------------------

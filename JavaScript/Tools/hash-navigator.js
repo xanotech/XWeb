@@ -13,7 +13,12 @@ var hashNavigator = {
 
     // Specifies the hash value to be requested if the hash is ever empty or missing.
     // By default, it is "Home.html".
-    defaultHash: 'Home.html'
+    defaultHash: 'Home.html',
+
+    // Sets whether caching is enabled when making requests to load a page.
+    // The hashNavigator itself does no caching but if isCachingEnabled is set
+    // to false, hashNavigator will attempt to bypass any caching that may be in effect.
+    isCachingEnabled: true
 } // end object
 
 
@@ -45,10 +50,10 @@ hashNavigator.getHash = function() {
 // changes.  It requests whatever is listed in the hash and applies the result
 // to the tag specified by contentId and calls afterHashchange if it is defined.
 hashNavigator.loadHashPage = function(hash) {
-    $.ajax({url: hash, cache: false}).done(function(data) {
+    $.ajax({url: hash, cache: this.isCachingEnabled}).done(function(data) {
         $('#' + hashNavigator.contentId).html(data);
-    }).fail(function(xhr) {
-        var text = xhr.responseText;
+    }).fail(function(request) {
+        var text = request.responseText;
         var lowerText = text.toLowerCase();
         var bodyStart = lowerText.indexOf('<body');
         if (bodyStart > -1) {
@@ -57,9 +62,16 @@ hashNavigator.loadHashPage = function(hash) {
             text = text.substring(bodyStart, bodyEnd);
         } // end if
         $('#' + hashNavigator.contentId).html(text);
-    }).always(function(dataOrXhr, textStatus, xhrOrErrorThrown) {
-        if (_(hashNavigator.afterHashchange).isFunction())
-            hashNavigator.afterHashchange(dataOrXhr, textStatus, xhrOrErrorThrown);
+    }).always(function(data, textStatus, request) {
+        if (typeof data.done == 'function' &&
+            typeof data.promise == 'function') {
+            var temp = data; // request (disguised as data) moved to temp
+            var data = request; // data (disguised as request) moved to data
+            var request = temp; // request (stored in temp) moved to request
+        } // end if
+
+        if (typeof hashNavigator.afterHashchange == 'function')
+            hashNavigator.afterHashchange(data, textStatus, request);
     });
 } // end function
 

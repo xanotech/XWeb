@@ -1,10 +1,9 @@
-/* xrepository JavaScript Library v0.1.1
- * http://xrepository.com/
- *
- * Copyright 2014 Xanotech LLC
- * Released under the MIT license
- * http://xrepository.com/#!License.html
- */
+// xrepository JavaScript Library v0.1.1
+// http://xrepository.com/
+//
+// Copyright 2014 Xanotech LLC
+// Released under the MIT license
+// http://xrepository.com/#!License.html
 
 
 
@@ -89,12 +88,12 @@ XRepository.Criterion.prototype._fixOperation = function() {
         case 'LIKE':
             this.Operation = 'Like';
             break;
-        case "NOT LIKE":
+        case 'NOT LIKE':
             this.Operation = 'NotLike';
             break;
         default:
-            throw new FormatException("OperationType string \"" + str + "\" is invalid.  " +
-                "Acceptable values are: =, >, >=, <, <=, !=, LIKE, NOT LIKE (== and <> are also accepted).");
+            throw new Error('OperationType string "' + str + '" is invalid.  ' +
+                'Acceptable values are: =, >, >=, <, <=, !=, LIKE, NOT LIKE (== and <> are also accepted).');
     } // end switch
 } // end function
 
@@ -116,10 +115,10 @@ XRepository.Cursor = function(type, criteria, repository) {
             if (criteria.constructor == String || criteria.constructor == Date)
                 value = '"' + value + '"';
             var methodName = arguments.callee.caller.getName();
-            throw 'Error in JSRepository.' + methodName + ': ' + methodName + '(' +
+            throw new Error('Error in JSRepository.' + methodName + ': ' + methodName + '(' +
                 type.getName() + ', ' + JSON.stringify(value) +
                 ') method cannot be used for ' + type.getName() +
-                ' because does not have a single column primary key.';
+                ' because does not have a single column primary key.');
         } // end if
         criteria = new XRepository.Criterion(idColumn, criteria);
     } // end if
@@ -318,9 +317,9 @@ XRepository.Cursor.prototype._validateCriterionArray = function(array) {
         if (element instanceof XRepository.Criterion)
             return;
         if (!element['Name'] || !element['Operation'])
-            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
+            throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
                 ' in criteria array missing Name and / or Operation properties\n' +
-                '(element = ' + JSON.stringify(element) + ').';
+                '(element = ' + JSON.stringify(element) + ').');
     });
 } // end function
 
@@ -347,10 +346,10 @@ XRepository.Cursor.prototype._validateSortObj = function(sortObj) {
     } // end if
 
     if (!isValid)
-        throw 'Error in JSRepository.sort: sortObj parameter was not valid.  ' +
+        throw new Error('Error in JSRepository.sort: sortObj parameter was not valid.  ' +
             'The sortObj parameter must be a String, an array of Strings, ' +
             'or an object where properties are numbers\n' +
-            '(typeof sortObj = ' + typeof sortObj + ', sortObj = ' + JSON.stringify(sortObj) + ').';
+            '(typeof sortObj = ' + typeof sortObj + ', sortObj = ' + JSON.stringify(sortObj) + ').');
     return sortObj;
 } // end function
 
@@ -530,9 +529,9 @@ XRepository.JSRepository.prototype.mapSingleReference = function(source, target,
 XRepository.JSRepository.prototype.remove = function(objects) {
     XRepository._validateRequiredLibraries();
     if (Object.isBasic(objects))
-        throw 'Error in JSRepository.remove: objects parameter cannot be a basic type ' +
+        throw new Error('Error in JSRepository.remove: objects parameter cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
-            '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').';
+            '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').');
     if (!objects)
         return;
 
@@ -571,9 +570,9 @@ XRepository.JSRepository.prototype.remove = function(objects) {
 XRepository.JSRepository.prototype.save = function(objects) {
     XRepository._validateRequiredLibraries();
     if (Object.isBasic(objects))
-        throw 'Error in JSRepository.save: objects parameter cannot be a basic type ' +
+        throw new Error('Error in JSRepository.save: objects parameter cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
-            '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').';
+            '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').');
     if (!objects)
         return;
 
@@ -858,15 +857,16 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
 XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
     jQuery.each(objects, function(index, obj) {
         if (Object.isBasic(obj))
-            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index + ' in objects' +
+            throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() +
+                ': element ' + index + ' in objects' +
                 'array parameter cannot be a basic type but must instead be an entity object\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
-                ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
+                ', objects[' + index + '] = ' + JSON.stringify(obj) + ').');
         else if (!obj)
-            throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
-                ' in objects array parameter is null or undefined\n' +
+            throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() +
+                ': element ' + index + ' in objects array parameter is null or undefined\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
-                ', objects[' + index + '] = ' + JSON.stringify(obj) + ').';
+                ', objects[' + index + '] = ' + JSON.stringify(obj) + ').');
     });
 } // end function
 
@@ -881,7 +881,7 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest) {
         } catch (e) {
             error = ajaxRequest.responseText;
         } // end try-catch
-        throw error;
+        throw new Error(error);
     } // end if
 } // end function
 
@@ -889,10 +889,10 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest) {
 
 XRepository.JSRepository.prototype._validateTypeParameter = function(parameterName, parameter) {
     if (typeof parameter != 'function')
-        throw 'Error in JSRepository.' + arguments.callee.caller.getName() + ': ' + parameterName +
-            ' parameter was not initialized or was not a function\n' +
+        throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() +
+            ': ' + parameterName + ' parameter was not initialized or was not a function\n' +
             '(typeof ' + parameterName + ' = ' + typeof parameter +
-            ', ' + parameterName + ' = ' + JSON.stringify(parameter) + ').';
+            ', ' + parameterName + ' = ' + JSON.stringify(parameter) + ').');
 } // end function
 
 
@@ -907,22 +907,22 @@ XRepository.isPromise = function(obj) {
 
 XRepository._validateRequiredLibraries = function() {
     if (typeof moment != 'function')
-        throw 'Error in JSRepository: moment.js does not appear to be referenced.  ' +
+        throw new Error('Error in JSRepository: moment.js does not appear to be referenced.  ' +
             'xrepository.js requires moment.js.  Make sure it is referenced ' +
-            'before attempting to invoke any methods of JSRepository.';
+            'before attempting to invoke any methods of JSRepository.');
 
     // Validate XTools
     if (!XRepository.JSRepository.getName)
-        throw 'Error in JSRepository: xtools.js does not appear to be referenced.  ' +
+        throw new Error('Error in JSRepository: xtools.js does not appear to be referenced.  ' +
             'xrepository.js requires xtools.js.  Make sure it is referenced ' +
-            'before attempting to invoke any methods of JSRepository.';
+            'before attempting to invoke any methods of JSRepository.');
 
     function getNameTest() {
     } // end function
     if (getNameTest.getName() != 'getNameTest')
-        throw 'Error in JSRepository: xtools.js appears to be malfunctioning.  ' +
+        throw new Error('Error in JSRepository: xtools.js appears to be malfunctioning.  ' +
             'Please make sure there are no other libraries overwriting the functions ' +
-            'xtools.js declares.';
+            'xtools.js declares.');
 } // end function
 
 

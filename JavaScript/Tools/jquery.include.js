@@ -3,24 +3,25 @@
 // be loaded.  The load is recursive such that any content loaded that contains
 // tags with data-include attributes will also be processed.  After all
 // includes are complete, the callback (which is optional) will be executed.
-$.fn.include = function(callback) {
-    if (callback && !_(callback).isFunction())
-        throw 'Error in include: callback argument is not a function';
+jQuery.fn.include = function(callback) {
+    if (callback && typeof callback != 'function')
+        throw new Error('Error in include: callback argument is not a function');
 
     // The _dataIncludeElements is an array containing all elements with data-include
     // attribute.  As elements are processed, the are added to this array.
     // Once all the elements are complete, the callback is executed.
     if (callback && !callback._dataIncludeElements)
-        callback._dataIncludeElements = new Array();
+        callback._dataIncludeElements = [];
 
-    this.find("[data-include]").each(function() {
+    var $includes = this.find("[data-include]");
+    $includes.each(function() {
         var $this = $(this);
 
         if (callback)
             callback._dataIncludeElements.push($this);
 
         var url = $this.attr('data-include');
-        $this.load(url, null, function(response, status, xhr) {
+        $this.load(url, null, function(response, status, request) {
             var $this = $(this);
 
             // If a callback is defined, mark the element as complete using a
@@ -30,7 +31,7 @@ $.fn.include = function(callback) {
                 $this.attr('data-include-complete', 'true');
 
             if (status == 'error')
-                $this.html(xhr.status + ' ' + xhr.statusText + ' (url = "' + url + '")');
+                $this.html(request.status + ' ' + request.statusText + ' (url = "' + url + '")');
 
             // This is a recursive call which will add more elements to _dataIncludeElements
             // if the content loaded in the .load call has an data-include elements.
@@ -43,13 +44,13 @@ $.fn.include = function(callback) {
             // array, and execute the callback.
             if (callback) {
                 var totalComplete = 0;
-                _(callback._dataIncludeElements).each(function(element) {
+                jQuery.each(callback._dataIncludeElements, function(index, element) {
                     if (element.attr('data-include-complete') == 'true')
                         totalComplete++;
                 });
 
                 if (callback._dataIncludeElements.length == totalComplete) {
-                    _(callback._dataIncludeElements).each(function(element) {
+                    jQuery.each(callback._dataIncludeElements, function(index, element) {
                         element.removeAttr('data-include-complete');
                     });
                     delete callback._dataIncludeElements;
@@ -58,5 +59,9 @@ $.fn.include = function(callback) {
             } // end if
         });
     });
+
+    if (callback && callback._dataIncludeElements.length == 0)
+        callback();
+
     return this;
 } // end function
