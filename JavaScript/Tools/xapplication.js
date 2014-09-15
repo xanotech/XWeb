@@ -92,16 +92,21 @@ function XApplication() {
         var exception;
         try {
             exception = JSON.parse(request.responseText);
-            this.handleError(exception.message, exception.stack);
+            arguments.callee.application.handleError(exception.message, exception.stack);
         } catch (e) {
-            this.handleError(request.responseText);
+            arguments.callee.application.handleError(request.responseText);
         }  // end try-catch
     } // end function
+    this.handleAjaxError.application = this;
 
 
 
     this.handleError = function(message, stack) {
-        this.alert(message + '<br><br>Stack Trace...<br>' + stack, 'alert-error');
+        message = (message || '').split('\n').join('<br>');
+        stack = (stack || '').split('\n').join('<br>');
+        if (stack)
+            stack = 'Stack Trace...<br>' + stack;
+        this.alert([message, stack].join('<br><br>'), 'alert-error');
     } // end method
 
 

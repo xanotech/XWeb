@@ -409,7 +409,7 @@ XRepository.JSRepository.prototype.count = function(type, criteria) {
     });
     var repo = this;
     return this._handleResponse(request, function() {
-        repo._validateResponse(request);
+        repo._validateResponse(request, 'count');
         return JSON.parse(request.responseText);
     });
 } // end function
@@ -561,7 +561,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     });
     var repo = this;
     return this._handleResponse(request, function() {
-        repo._validateResponse(request);
+        repo._validateResponse(request, 'remove');
     });
 } // end function
 
@@ -602,7 +602,7 @@ XRepository.JSRepository.prototype.save = function(objects) {
     });
     var repo = this;
     return this._handleResponse(request, function() {
-        repo._validateResponse(request);
+        repo._validateResponse(request, 'save');
         var ids = JSON.parse(request.responseText);
         repo._applyIds(objects, ids);
         return objects;
@@ -662,7 +662,7 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
     });
     var repo = this;
     return this._handleResponse(request, function() {
-        repo._validateResponse(request);
+        repo._validateResponse(request, 'toArray');
         var objs = JSON.parse(request.responseText);
         repo._convert(objs, cursor.type);
         repo._fixDates(objs);
@@ -799,7 +799,10 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
         var tableDef = this._getTableDefinition(type.getName());
         if (tableDef != null)
             tableNames.push(tableDef.FullName);
-        type = type.getBase();
+        if (typeof type.getBase == 'function')
+            type = type.getBase();
+        else
+            type = Object;
     } // end while
     tableNames.reverse();
     return tableNames;
@@ -872,15 +875,26 @@ XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
 
 
 
-XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest) {
+XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest, methodName) {
     if (ajaxRequest.status == 500) {
         var error;
         try {
-            error = JSON.parse(ajaxRequest.responseText);
-            error = error.Message + '\n\nStack Trace...\n' + error.StackTrace;
+            errorObj = JSON.parse(ajaxRequest.responseText);
+            if (errorObj.message || errorObj.stack) {
+                var message = errorObj.message || '';
+                var stack = errorObj.stack || '';
+                if (stack)
+                    stack = 'Stack Trace...\n' + stack;
+                error = [message, stack].join('\n\n');
+            } // end if
         } catch (e) {
-            error = ajaxRequest.responseText;
+            // Looks like JSON.parse failed.  Do nothing here because error
+            // is undefined it will be picked up after this try-catch.
         } // end try-catch
+        if (!error)
+            error = 'Error in JSRepository.'+ methodName +
+                ': unable to parse server error response.  Response data...\n' +
+                ajaxRequest.responseText;
         throw new Error(error);
     } // end if
 } // end function
