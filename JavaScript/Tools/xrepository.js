@@ -1,4 +1,4 @@
-// xrepository JavaScript Library v0.1.1
+// xrepository JavaScript Library v0.2
 // http://xrepository.com/
 //
 // Copyright 2014 Xanotech LLC
@@ -469,7 +469,7 @@ XRepository.JSRepository.prototype.mapMultipleReference = function(source, targe
 
     if (!methodName) {
         methodName = target.getName();
-        if (owl && owl.pluralize)
+        if (typeof owl != 'undefined' && owl.pluralize)
             methodName = owl.pluralize(methodName);
         else {
             if (methodName.endsWith('s'))
