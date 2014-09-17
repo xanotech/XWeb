@@ -1,4 +1,4 @@
-// xtools JavaScript Library v1.0
+// xtools JavaScript Library v1.1
 //
 // Copyright 2014 Xanotech LLC
 // Released under the MIT license
