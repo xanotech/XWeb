@@ -50,8 +50,14 @@ hashNavigator.getHash = function() {
 // changes.  It requests whatever is listed in the hash and applies the result
 // to the tag specified by contentId and calls afterHashchange if it is defined.
 hashNavigator.loadHashPage = function(hash) {
-    $.ajax({url: hash, cache: this.isCachingEnabled}).done(function(data) {
-        $('#' + hashNavigator.contentId).html(data);
+    $.ajax({ url: hash, cache: this.isCachingEnabled }).done(function(data) {
+        var $content = $('#' + hashNavigator.contentId);
+        if (!$content.length) {
+            $content = $('#' + hashNavigator.contentId.toLowerCase())
+            if ($content.length)
+                hashNavigator.contentId = hashNavigator.contentId.toLowerCase();
+        } // end if
+        $content.html(data);
     }).fail(function(request) {
         var text = request.responseText;
         var lowerText = text.toLowerCase();
@@ -71,7 +77,7 @@ hashNavigator.loadHashPage = function(hash) {
         } // end if
 
         if (typeof hashNavigator.afterHashchange == 'function')
-            hashNavigator.afterHashchange(data, textStatus, request);
+            hashNavigator.afterHashchange.call(null, data, textStatus, request);
     });
 } // end function
 

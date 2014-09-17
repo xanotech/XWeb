@@ -1,22 +1,22 @@
 function XApplication() {
 
-    this.afterHashchange = function() {
+    var application = this;
+
+
+
+    application.afterHashchange = function() {
         if (typeof hashNavigator == 'undefined')
             return;
 
         var hash = hashNavigator.getHash();
-        var queryIndex = hash.indexOf('?');
-        this.pageQuery = null;
-        if (queryIndex > -1) {
-            pageQuery = hash.substring(queryIndex + 1);
-            hash = hash.substring(0, queryIndex);
-        } // end if
+        application.pageQuery = XApplication.getQuery(hash);
+        hash = XApplication.getBaseUrl(hash);
         if (!hash.toUpperCase().endsWith('.HTML'))
             return;
 
         var pageObjName = hash.substring(0, hash.length - 5) + 'Page';
         try {
-            this.page = eval('new ' + pageObjName + '();');
+            application.page = eval('new ' + pageObjName + '();');
         } catch (e) {
             // Swallow errors only when the message indicates that the object type specified
             // by pageObjName is undefined (which is acceptable in this case).  Throw all other errors.
@@ -24,7 +24,7 @@ function XApplication() {
             msg = msg.split('@').join(pageObjName);
             if (e.message != msg)
                 throw e;
-            this.page = null;
+            application.page = null;
         } // end try-catch
 
         // If page.init exists, then set initFunc to reference it.  Or if page.init isn't defined
@@ -32,8 +32,8 @@ function XApplication() {
         // jquery.include is present.  If it is present, call it passing initFunc as a callback.
         // If it doesn't exist, just call initFunc (if it is set).
         var initFunc;
-        if (this.page && typeof page.init == 'function')
-            initFunc = this.page.init;
+        if (application.page && typeof application.page.init == 'function')
+            initFunc = application.page.init;
         else if (typeof init == 'function') {
             if (!init.hash)
                 init.hash = hash;
@@ -49,7 +49,7 @@ function XApplication() {
 
 
 
-    this.alert = function(html, alertClass) {
+    application.alert = function(html, alertClass) {
         if (typeof jQuery().emulateTransitionEnd == 'function') {
             if (!alertClass)
                 alertClass = 'alert-success';
@@ -68,50 +68,49 @@ function XApplication() {
 
 
 
-    this.defaultInit = function() {
-        window.onerror = this.handleJavaScriptError;
+    application.defaultInit = function() {
+        window.onerror = application.handleJavaScriptError;
 
-        hashNavigator.afterHashchange = this.afterHashchange;
+        hashNavigator.afterHashchange = application.afterHashchange;
 
-        $(document).ajaxComplete(this.handleAjaxCompletion);
-        $(document).ajaxError(this.handleAjaxError);
+        $(document).ajaxComplete(application.handleAjaxCompletion);
+        $(document).ajaxError(application.handleAjaxError);
     } // end method
 
 
 
-    this.handleAjaxCompletion = function(event, request, settings, error) {
+    application.handleAjaxCompletion = function(event, request, settings, error) {
     } // end function
 
 
 
-    this.handleAjaxError = function(event, request, settings, error) {
+    application.handleAjaxError = function(event, request, settings, error) {
         if (request.ignoreErrorHandler || !settings.async ||
-            settings.url.substring(settings.url.length - 5).toUpperCase() == '.HTML')
+            XApplication.getBaseUrl(settings.url).toUpperCase().endsWith('.HTML'))
             return;
 
         var exception;
         try {
             exception = JSON.parse(request.responseText);
-            arguments.callee.application.handleError(exception.message, exception.stack);
+            application.handleError(exception.message, exception.stack);
         } catch (e) {
-            arguments.callee.application.handleError(request.responseText);
+            application.handleError(request.responseText);
         }  // end try-catch
     } // end function
-    this.handleAjaxError.application = this;
 
 
 
-    this.handleError = function(message, stack) {
+    application.handleError = function(message, stack) {
         message = (message || '').split('\n').join('<br>');
         stack = (stack || '').split('\n').join('<br>');
         if (stack)
             stack = 'Stack Trace...<br>' + stack;
-        this.alert([message, stack].join('<br><br>'), 'alert-error');
+        application.alert([message, stack].join('<br><br>'), 'alert-error');
     } // end method
 
 
 
-    this.handleJavaScriptError = function(message, file, line, column, errorObj) {
+    application.handleJavaScriptError = function(message, file, line, column, errorObj) {
         if (message.indexOf('Uncaught ') == 0)
             message = message.substring(9);
 
@@ -129,21 +128,39 @@ function XApplication() {
             stack += '\n' + stackArray.join('\n');
         } // end if
 
-        arguments.callee.application.handleError(message, stack);
+        application.handleError(message, stack);
     } // end function
-    this.handleJavaScriptError.application = this;
 
 
 
-    this.init = function() {
+    application.init = function() {
     } // end function
 
 
 
     if (!XApplication.applications)
         XApplication.applications = [];
-    XApplication.applications.push(this);
+    XApplication.applications.push(application);
 
+} // end function
+
+
+
+XApplication.getBaseUrl = function(url) {
+    var queryIndex = url.indexOf('?');
+    if (queryIndex > -1)
+        url = url.substring(0, queryIndex);
+    return url;
+} // end function
+
+
+
+XApplication.getQuery = function(url) {
+    var query = null;
+    var queryIndex = url.indexOf('?');
+    if (queryIndex > -1)
+        query = url.substring(queryIndex + 1);
+    return query;
 } // end function
 
 
