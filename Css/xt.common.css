@@ -63,6 +63,10 @@
     vertical-align: top;
 }
 
+.wide {
+    width: 100%;
+}
+
 div.padded,
 table.padded th,
 table.padded td {
@@ -73,8 +77,8 @@ table {
     border-collapse: collapse;
     font-size: inherit;
     font-style: inherit;
-    font-weight: inherit;
     font-variant: inherit;
+    font-weight: inherit;
 }
 
 td, th {

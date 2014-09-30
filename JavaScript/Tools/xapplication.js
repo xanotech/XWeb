@@ -14,27 +14,24 @@ function XApplication() {
         if (!hash.toUpperCase().endsWith('.HTML'))
             return;
 
-        var pageObjName = hash.substring(0, hash.length - 5) + 'Page';
-        try {
-            application.page = eval('new ' + pageObjName + '();');
-        } catch (e) {
-            // Swallow errors only when the message indicates that the object type specified
-            // by pageObjName is undefined (which is acceptable in this case).  Throw all other errors.
-            var msg = XApplication.getUndefinedMessage();
-            msg = msg.split('@').join(pageObjName);
-            if (e.message != msg)
-                throw e;
-            application.page = null;
-        } // end try-catch
+        application.page = XApplication.createPageObject(hash);
 
-        // If page.init exists, then set initFunc to reference it.  Or if page.init isn't defined
-        // look for a free floating init and set initFunc to that.  Then check to see if
-        // jquery.include is present.  If it is present, call it passing initFunc as a callback.
+        // If page.init exists, then set initFunc to reference it.  Or if
+        // page.init isn't defined look for a "free floating" init and set
+        // initFunc to that.  Then check to see if jquery.include is present.
+        // If it is present, call it passing initFunc as a callback.
         // If it doesn't exist, just call initFunc (if it is set).
         var initFunc;
         if (application.page && typeof application.page.init == 'function')
             initFunc = application.page.init;
         else if (typeof init == 'function') {
+            // Once an init method is loaded by a page, it does not go away
+            // when another page is loaded.  Since we only want to call
+            // init with its page, the following logic associates
+            // the init function with the hash that spawned it.
+            // and then checks the init's hash with the current hash
+            // setting initFunc (which is what is called) only if the
+            // hash values match.
             if (!init.hash)
                 init.hash = hash;
             if (init.hash == hash)
@@ -142,6 +139,29 @@ function XApplication() {
         XApplication.applications = [];
     XApplication.applications.push(application);
 
+} // end function
+
+
+
+XApplication.createPageObject = function(hash) {
+    hash = hash.split('/').join('.');
+    var pageObjName = hash.substring(0, hash.length - 5) + 'Page';
+    var pageObjParts = pageObjName.split('.');
+
+    var isDefined = true;
+    pageObjName = '';
+    jQuery.each(pageObjParts, function(index, part) {
+        if (pageObjName)
+            pageObjName += '.';
+        pageObjName += part;
+        isDefined = eval('typeof ' + pageObjName + ';') != 'undefined';
+        return isDefined;
+    });
+
+    var pageObj = null;
+    if (isDefined && eval('typeof ' + pageObjName + ';') == 'function')
+        pageObj = eval('new ' + pageObjName + '();');
+    return pageObj;
 } // end function
 
 
