@@ -133,6 +133,10 @@ XRepository.Cursor = function(type, criteria, repository) {
     else
         criteria = XRepository.Criterion.create(criteria);
 
+    jQuery.each(criteria, function(index, criterion) {
+        criterion.Name = repository._getMappedColumn(type, criterion.Name);
+    });
+
     this.type = type;
     this.repository = repository;
     this.data = null;
@@ -362,9 +366,11 @@ XRepository.JSRepository = function(path, isSynchronized) {
         isSynchronized.constructor != Boolean)
         isSynchronized = true;
 
+    this._columnMapCache = {};
     this._columnsCache = {};
     this._primaryKeysCache = {};
     this._tableDefinitionCache = {};
+    this._tableNameCache = {};
     this.isSynchronized = isSynchronized;
 
     // Setup default paths
@@ -462,6 +468,23 @@ XRepository.JSRepository.prototype.findOne = function(type, criteria) {
 
 
 
+XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, columnName) {
+    XRepository._validateRequiredLibraries();
+    this._validateTypeParameter('type', type);
+    if (!propertyName || propertyName.constructor != String)
+        throw new Error('Error in JS    Repository.mapColumn: propertyName parameter is missing or is not a String.');
+    if (!columnName || columnName.constructor != String)
+        throw new Error('Error in JSRepository.mapColumn: columnName parameter is missing or is not a String.');
+
+    var typeName = type.getName();
+    columnName = columnName.toUpperCase();
+    if (!this._columnMapCache[typeName])
+        this._columnMapCache[typeName] = {}
+    this._columnMapCache[typeName][columnName] = propertyName;
+} // end function
+
+
+
 XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, methodName) {
     XRepository._validateRequiredLibraries();
     this._validateTypeParameter('source', source);
@@ -522,6 +545,22 @@ XRepository.JSRepository.prototype.mapSingleReference = function(source, target,
         this['_' + methodName] = objects;
         return objects[0] || null;
     } // end function
+} // end function
+
+
+
+XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
+    XRepository._validateRequiredLibraries();
+    this._validateTypeParameter('type', type);
+    if (!tableName || tableName.constructor != String)
+        throw new Error('Error in JSRepository.mapTable: tableName parameter is missing or is not a String.');
+
+    var tableNames = [];
+    var baseType = type.getBase();
+    if (baseType.constructor != Object)
+        tableNames = tableNames.concat(this._getTableNames(baseType));
+    tableNames.push(tableName);
+    this._tableNameCache[type.getName()] = tableNames;
 } // end function
 
 
@@ -637,10 +676,12 @@ XRepository.JSRepository.prototype._applyTableNames = function(objects) {
 
 
 XRepository.JSRepository.prototype._convert = function(objects, type) {
+    var repo = this;
     jQuery.each(objects, function(index, object) {
         var newObject = new type();
         jQuery.each(object, function(property, value) {
-            newObject[property] = value;
+            var mappedProperty = repo._getMappedProperty(type, property);
+            newObject[mappedProperty] = value;
         });
         objects[index] = newObject;
     });
@@ -676,12 +717,18 @@ XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
     if (!columnName)
         return null;
 
-    columnName = columnName.toUpperCase();
-    var columns = this._getColumns(type.getName());
+    var tableNames = this._getTableNames(type);
+    if (!tableNames.length)
+        return null;
+
+    var columns = this._getColumns(tableNames[0]);
     var result = null;
+    var repo = this;
     jQuery.each(columns, function(index, column) {
-        if (column.toUpperCase() == columnName) {
-            result = column;
+        var propertyName = repo._getMappedProperty(type, column);
+        if ((propertyName == column && column.is(columnName)) ||
+            (propertyName != column && propertyName == columnName)) {
+            result = propertyName;
             return false;
         } // end if
     });
@@ -730,7 +777,8 @@ XRepository.JSRepository.prototype._fixDates = function(objects) {
                 // Look for ISO 8601 dates: 2013-10-28T16:38:30Z
                 var m = moment(value);
                 if (m.isValid())
-                    obj[property] = m.toDate();
+                    obj[property] = new Date(m.year(), m.month(), m.date(),
+                        m.hour(), m.minute(), m.second(), m.millisecond());
 
             } else if (value.substring(0, 6) == '/Date(' &&
                 value.substring(value.length - 1) == '/' && !isNaN(value.substring(6, value.length - 7))) {
@@ -776,7 +824,45 @@ XRepository.JSRepository.prototype._getIdColumn = function(type) {
     var columns = this._getPrimaryKeys(tableNames[0]);
     if (columns.length != 1)
         return null;
-    return columns[0];
+
+    return this._getMappedProperty(type, columns[0]);
+} // end function
+
+
+
+XRepository.JSRepository.prototype._getMappedColumn = function(type, propertyName) {
+    while (type != Object) {
+        var cache = this._columnMapCache[type.getName()]
+        if (cache) {
+            var mappedColumn;
+            jQuery.each(cache, function(column, property) {
+                if (property == propertyName) {
+                    mappedColumn = column;
+                    return false;
+                } // end if
+            });
+            if (mappedColumn)
+                return mappedColumn;
+        }
+        type = type.getBase();
+    } // end while
+    return propertyName;
+} // end function
+
+
+
+XRepository.JSRepository.prototype._getMappedProperty = function(type, columnName) {
+    var column = columnName.toUpperCase();
+    while (type != Object) {
+        var cache = this._columnMapCache[type.getName()]
+        if (cache) {
+            var propertyName = cache[column]
+            if (propertyName)
+                return propertyName;
+        } // end if
+        type = type.getBase();
+    } // end while
+    return columnName;
 } // end function
 
 
@@ -794,6 +880,10 @@ XRepository.JSRepository.prototype._getTableDefinition = function(tableName) {
 
 
 XRepository.JSRepository.prototype._getTableNames = function(type) {
+    var typeName = type.getName();
+    if (this._tableNameCache[typeName])
+        return this._tableNameCache[typeName];
+
     var tableNames = [];
     while (type != Object) {
         var tableDef = this._getTableDefinition(type.getName());
@@ -805,7 +895,9 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
             type = Object;
     } // end while
     tableNames.reverse();
-    return tableNames;
+    this._tableNameCache[typeName] = tableNames;
+
+    return this._tableNameCache[typeName];
 } // end function
 
 
@@ -828,7 +920,7 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
     if (!(objects instanceof Array))
         objects = [objects];
 
-    var newObjs = [];
+    var cleanObjs = [];
     var repo = this;
     jQuery.each(objects, function(index, obj) {
         if (!obj || Object.isBasic(obj) || obj instanceof Array)
@@ -840,19 +932,26 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
             upperCaseObj[property.toUpperCase()] = value;
         });
 
-        var newObj = {};
-        newObj._tableNames = obj._tableNames;
-        jQuery.each(newObj._tableNames, function(index, tableName) {
+        var cleanObj = {};
+        cleanObj._tableNames = obj._tableNames;
+        jQuery.each(cleanObj._tableNames, function(index, tableName) {
             var columns = repo._getColumns(tableName);
             jQuery.each(columns, function(index, column) {
-                var upperCaseColumn = column.toUpperCase()
-                if (upperCaseObj.hasOwnProperty(upperCaseColumn))
-                    newObj[column] = upperCaseObj[upperCaseColumn];
+                var upperCaseColumn = column.toUpperCase();
+                var property = repo._getMappedProperty(obj.constructor, upperCaseColumn);
+
+                if (property == upperCaseColumn) {
+                    if (upperCaseObj.hasOwnProperty(upperCaseColumn))
+                        cleanObj[column] = upperCaseObj[upperCaseColumn];
+                } else {
+                    if (obj.hasOwnProperty(property))
+                        cleanObj[column] = obj[property];
+                } // end if-else
             });
         });
-        newObjs.push(newObj);
+        cleanObjs.push(cleanObj);
     });
-    return newObjs;
+    return cleanObjs;
 } // end function
 
 
