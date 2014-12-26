@@ -1,4 +1,4 @@
-// xrepository JavaScript Library v0.3
+// xrepository JavaScript Library v0.4
 // http://xrepository.com/
 //
 // Copyright 2014 Xanotech LLC
@@ -366,11 +366,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
         isSynchronized.constructor != Boolean)
         isSynchronized = true;
 
-    this._columnMapCache = {};
-    this._columnsCache = {};
-    this._primaryKeysCache = {};
-    this._tableDefinitionCache = {};
-    this._tableNameCache = {};
+    this._internal = {};
+    this._internal.columnMapCache = {};
+    this._internal.columnsCache = {};
+    this._internal.primaryKeysCache = {};
+    this._internal.tableDefinitionCache = {};
+    this._internal.tableNameCache = {};
     this.isSynchronized = isSynchronized;
 
     // Setup default paths
@@ -392,6 +393,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this[selfProperty] = this;
     this[altProperty] = new XRepository.JSRepository(path, false);
+    this[altProperty]._internal = this._internal;
     this[altProperty].path = this.path;
 } // end function
 
@@ -437,7 +439,8 @@ XRepository.JSRepository.prototype.create = function(type) {
     jQuery.each(tableNames, function(index, tableName) {
         var columns = repo._getColumns(tableName);
         jQuery.each(columns, function(index, column) {
-            obj[column] = null;
+            var property = repo._getMappedProperty(type, column);
+            obj[property] = null;
         });
     });
     return obj;
@@ -478,9 +481,9 @@ XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, colu
 
     var typeName = type.getName();
     columnName = columnName.toUpperCase();
-    if (!this._columnMapCache[typeName])
-        this._columnMapCache[typeName] = {}
-    this._columnMapCache[typeName][columnName] = propertyName;
+    if (!this._internal.columnMapCache[typeName])
+        this._internal.columnMapCache[typeName] = {}
+    this._internal.columnMapCache[typeName][columnName] = propertyName;
 } // end function
 
 
@@ -560,7 +563,7 @@ XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
     if (baseType.constructor != Object)
         tableNames = tableNames.concat(this._getTableNames(baseType));
     tableNames.push(tableName);
-    this._tableNameCache[type.getName()] = tableNames;
+    this._internal.tableNameCache[type.getName()] = tableNames;
 } // end function
 
 
@@ -811,28 +814,23 @@ XRepository.JSRepository.prototype._getCachedValue = function(cache, tableName, 
 
 
 XRepository.JSRepository.prototype._getColumns = function(tableName) {
-    return this._getCachedValue(this._columnsCache, tableName, this.path.getColumns);
+    return this._getCachedValue(this._internal.columnsCache, tableName, this.path.getColumns);
 } // end function
 
 
 
 XRepository.JSRepository.prototype._getIdColumn = function(type) {
-    var tableNames = this._getTableNames(type);
-    if (tableNames.length == 0)
+    var keys = this._getPrimaryKeys(type);
+    if (keys.length != 1)
         return null;
-
-    var columns = this._getPrimaryKeys(tableNames[0]);
-    if (columns.length != 1)
-        return null;
-
-    return this._getMappedProperty(type, columns[0]);
+    return keys[0];
 } // end function
 
 
 
 XRepository.JSRepository.prototype._getMappedColumn = function(type, propertyName) {
     while (type != Object) {
-        var cache = this._columnMapCache[type.getName()]
+        var cache = this._internal.columnMapCache[type.getName()]
         if (cache) {
             var mappedColumn;
             jQuery.each(cache, function(column, property) {
@@ -854,7 +852,7 @@ XRepository.JSRepository.prototype._getMappedColumn = function(type, propertyNam
 XRepository.JSRepository.prototype._getMappedProperty = function(type, columnName) {
     var column = columnName.toUpperCase();
     while (type != Object) {
-        var cache = this._columnMapCache[type.getName()]
+        var cache = this._internal.columnMapCache[type.getName()]
         if (cache) {
             var propertyName = cache[column]
             if (propertyName)
@@ -867,22 +865,37 @@ XRepository.JSRepository.prototype._getMappedProperty = function(type, columnNam
 
 
 
-XRepository.JSRepository.prototype._getPrimaryKeys = function(tableName) {
-    return this._getCachedValue(this._primaryKeysCache, tableName, this.path.getPrimaryKeys);
+XRepository.JSRepository.prototype._getPrimaryKeys = function(typeOrTable) {
+    if (typeOrTable.constructor == String)
+        return this._getCachedValue(this._internal.primaryKeysCache, typeOrTable, this.path.getPrimaryKeys);
+
+    if (typeOrTable.constructor == Function) {
+        var tableNames = this._getTableNames(typeOrTable);
+        if (tableNames.length == 0)
+            return null;
+
+        var keys = [];
+        var columns = this._getPrimaryKeys(tableNames[0]);
+        var repo = this;
+        jQuery.each(columns, function(index, column) {
+            keys.push(repo._getMappedProperty(typeOrTable, column));
+        });
+        return keys;
+    } // end if
 } // end function
 
 
 
 XRepository.JSRepository.prototype._getTableDefinition = function(tableName) {
-    return this._getCachedValue(this._tableDefinitionCache, tableName, this.path.getTableDefinition);
+    return this._getCachedValue(this._internal.tableDefinitionCache, tableName, this.path.getTableDefinition);
 } // end function
 
 
 
 XRepository.JSRepository.prototype._getTableNames = function(type) {
     var typeName = type.getName();
-    if (this._tableNameCache[typeName])
-        return this._tableNameCache[typeName];
+    if (this._internal.tableNameCache[typeName])
+        return this._internal.tableNameCache[typeName];
 
     var tableNames = [];
     while (type != Object) {
@@ -895,9 +908,9 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
             type = Object;
     } // end while
     tableNames.reverse();
-    this._tableNameCache[typeName] = tableNames;
+    this._internal.tableNameCache[typeName] = tableNames;
 
-    return this._tableNameCache[typeName];
+    return this._internal.tableNameCache[typeName];
 } // end function
 
 
