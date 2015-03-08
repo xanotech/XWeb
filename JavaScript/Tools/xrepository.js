@@ -729,8 +729,9 @@ XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
     var repo = this;
     jQuery.each(columns, function(index, column) {
         var propertyName = repo._getMappedProperty(type, column);
-        if ((propertyName == column && column.is(columnName)) ||
-            (propertyName != column && propertyName == columnName)) {
+        //if ((propertyName == column && column.is(columnName)) ||
+        //    (propertyName != column && propertyName == columnName)) {
+        if (propertyName.is(columnName)) {
             result = propertyName;
             return false;
         } // end if
@@ -778,7 +779,7 @@ XRepository.JSRepository.prototype._fixDates = function(objects) {
 
             if (value.length == 20 && value.substring(10, 11) == 'T' && value.substring(19, 20) == 'Z') {
                 // Look for ISO 8601 dates: 2013-10-28T16:38:30Z
-                var m = moment(value);
+                var m = moment.utc(value);
                 if (m.isValid())
                     obj[property] = new Date(m.year(), m.month(), m.date(),
                         m.hour(), m.minute(), m.second(), m.millisecond());

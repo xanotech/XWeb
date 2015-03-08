@@ -6,25 +6,63 @@
 
 
 
+Date.prototype.getDayName = function() {
+    switch (this.getDay()) {
+        case 0: return 'Sunday';
+        case 1: return 'Monday';
+        case 2: return 'Tuesday';
+        case 3: return 'Wednesday';
+        case 4: return 'Thursday';
+        case 5: return 'Friday';
+        case 6: return 'Saturday';
+    } // end switch
+} // end function
+
+
+
+Date.prototype.getMonthName = function() {
+    switch (this.getMonth()) {
+        case 0: return 'January';
+        case 1: return 'February';
+        case 2: return 'March';
+        case 3: return 'April';
+        case 4: return 'May';
+        case 5: return 'June';
+        case 6: return 'July';
+        case 7: return 'August';
+        case 8: return 'September';
+        case 9: return 'October';
+        case 10: return 'November';
+        case 11: return 'December';
+    } // end switch
+} // end function
+
+
+
 Date.prototype.format = function(format) {
-    var o = {
-        'M+': this.getMonth() + 1,
+    var dateParts = {
         'd+': this.getDate(),
         'h+': this.getHours(),
         'm+': this.getMinutes(),
         's+': this.getSeconds(),
         'q+': Math.floor((this.getMonth() + 3) / 3),
-        'S': this.getMilliseconds()
+        'S': this.getMilliseconds(),
+        'MMMM+': this.getMonthName(),
+        'MMM': this.getMonthName().substring(0, 3),
+        'MM': this.getMonth() + 1,
+        'M': this.getMonth() + 1
     }
 
     if (/(y+)/.test(format))
         format = format.replace(RegExp.$1,
             (this.getFullYear() + "").substr(4 - RegExp.$1.length));
-    for (var k in o)
-        if (new RegExp("(" + k + ")").test(format))
-            format = format.replace(RegExp.$1,
-                RegExp.$1.length == 1 ? o[k] :
-                    ("00" + o[k]).substr(("" + o[k]).length));
+    for (var part in dateParts)
+        if (new RegExp("(" + part + ")").test(format)) {
+            var value = dateParts[part];
+            if (!(part.length > 2 || RegExp.$1.length == 1))
+                value = ('00' + value).substr(('' + value).length);
+            format = format.replace(RegExp.$1, value);
+        } // end if
     return format;
 } // end function
 
@@ -82,7 +120,7 @@ String.prototype.is = String.prototype.is || function(str) {
 
 
 String.prototype.remove = String.prototype.remove || function(str) {
-    return this.replace(str, '');
+    return this.split(str).join('');
 } // end function
 
 

@@ -1,3 +1,11 @@
+// xapplication JavaScript Library v1.1
+//
+// Copyright 2014 Xanotech LLC
+// Released under the MIT license
+// http://opensource.org/licenses/MIT
+
+
+
 function XApplication() {
 
     var application = this;
@@ -82,6 +90,9 @@ function XApplication() {
 
 
     application.handleAjaxError = function(event, request, settings, error) {
+        if (request.status >= 200 && request.status < 300)
+            return;
+
         if (request.ignoreErrorHandler || !settings.async ||
             XApplication.getBaseUrl(settings.url).toUpperCase().endsWith('.HTML'))
             return;

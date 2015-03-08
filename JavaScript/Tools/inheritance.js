@@ -1,4 +1,4 @@
-// Used for setting up rudamentary inheritance with Javascript.  To use, two
+﻿// Used for setting up rudamentary inheritance with Javascript.  To use, two
 // calls are necessary.  Consider the example of Cat inheriting from Animal...
 // function Cat() {
 //     Animal.call(this);
@@ -13,6 +13,9 @@ Function.prototype.inherit = function(base) {
     newConstructor.prototype = base.prototype;
     this.prototype = new newConstructor();
     this._base = base;
+    if (!base._subTypes)
+        base._subTypes = [];
+    base._subTypes.push(this);
 } // end function
 
 
@@ -26,4 +29,22 @@ Function.prototype.getBase = function() {
     else
         base = Object;
     return base;
+} // end function
+
+
+
+Function.prototype.getSubTypes = function(recursive) {
+    var subTypes = [];
+    if (this._subTypes)
+        subTypes = subTypes.concat(this._subTypes);
+
+    if (recursive) {
+        for (var st = 0; st < subTypes.length; st++) {
+            var moreSubTypes = subTypes[st].getSubTypes(true);
+            if (moreSubTypes.length)
+                subTypes = subTypes.concat(moreSubTypes);
+        } // end for
+    } // end if
+
+    return subTypes;
 } // end function
