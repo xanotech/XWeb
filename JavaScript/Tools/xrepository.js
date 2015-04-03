@@ -560,7 +560,7 @@ XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
 
     var tableNames = [];
     var baseType = type.getBase();
-    if (baseType.constructor != Object)
+    if (baseType != Object)
         tableNames = tableNames.concat(this._getTableNames(baseType));
     tableNames.push(tableName);
     this._internal.tableNameCache[type.getName()] = tableNames;
@@ -595,6 +595,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     this._validateEntityArray(objects);
     this._applyTableNames(objects);
     objects = this._removeExtraneousProperties(objects);
+    this._fixDateObjects(objects);
     var request = jQuery.ajax(this.path.root + '/' + this.path.remove, {
         async: !this.isSynchronized,
         cache: false,
@@ -636,6 +637,7 @@ XRepository.JSRepository.prototype.save = function(objects) {
     this._validateEntityArray(objects);
     this._applyTableNames(objects);
     var cleanObjects = this._removeExtraneousProperties(objects);
+    this._fixDateObjects(cleanObjects);
     var request = jQuery.ajax(this.path.root + '/' + this.path.save, {
         async: !this.isSynchronized,
         cache: false,
@@ -709,7 +711,7 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
         repo._validateResponse(request, 'toArray');
         var objs = JSON.parse(request.responseText);
         repo._convert(objs, cursor.type);
-        repo._fixDates(objs);
+        repo._fixDateStrings(objs);
         return objs;
     });
 } // end function
@@ -768,7 +770,25 @@ XRepository.JSRepository.prototype._findForeignKeyColumn = function(referencedTy
 
 
 
-XRepository.JSRepository.prototype._fixDates = function(objects) {
+XRepository.JSRepository.prototype._fixDateObjects = function(objects) {
+    if (!(objects instanceof Array))
+        objects = [objects];
+
+    jQuery.each(objects, function(index, obj) {
+        jQuery.each(obj, function(property, value) {
+            if (!value || value.constructor != Date)
+                return;
+
+            var m = moment.utc([value.getFullYear(), value.getMonth(), value.getDate(),
+                value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds()]);
+            obj[property] = m.toDate();
+        });
+    });
+} // end function
+
+
+
+XRepository.JSRepository.prototype._fixDateStrings = function(objects) {
     if (!(objects instanceof Array))
         objects = [objects];
 
@@ -908,6 +928,9 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
         else
             type = Object;
     } // end while
+    if (!tableNames.length)
+        throw new Error('There are no tables associated with "' + typeName + '".')
+
     tableNames.reverse();
     this._internal.tableNameCache[typeName] = tableNames;
 
