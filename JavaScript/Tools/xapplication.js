@@ -1,6 +1,6 @@
 // xapplication JavaScript Library v1.1
 //
-// Copyright 2014 Xanotech LLC
+// Copyright 2015 Xanotech LLC
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
 
