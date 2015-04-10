@@ -1,4 +1,4 @@
-// xtools JavaScript Library v1.1
+// xtools JavaScript Library v1.2
 //
 // Copyright 2015 Xanotech LLC
 // Released under the MIT license
@@ -47,10 +47,12 @@ Date.prototype.format = function(format) {
         's+': this.getSeconds(),
         'q+': Math.floor((this.getMonth() + 3) / 3),
         'S': this.getMilliseconds(),
-        'MMMM+': this.getMonthName(),
-        'MMM': this.getMonthName().substring(0, 3),
+        'MMMM+': '~XxxX~',
+        'MMM': '~XxX~',
         'MM': this.getMonth() + 1,
-        'M': this.getMonth() + 1
+        'M': this.getMonth() + 1,
+        '~XxxX~': this.getMonthName(),
+        '~XxX~': this.getMonthName().substring(0, 3)
     }
 
     if (/(y+)/.test(format))
