@@ -1,8 +1,17 @@
-// xtools JavaScript Library v1.2
+// xtools JavaScript Library v1.3
 //
 // Copyright 2015 Xanotech LLC
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
+
+
+
+Array.prototype.indexOf = Array.prototype.indexOf || function(searchElement, fromIndex) {
+    for (var i = fromIndex || 0; i < this.length; i++)
+        if (this[i] === searchElement)
+            return i;
+    return -1;
+} // end function
 
 
 
@@ -78,6 +87,9 @@ Date.prototype.is = function(date) {
 
 // Returns the name of a function as initially defined.
 Function.prototype.getName = function() {
+    if (this.name)
+        return this.name;
+
     var funcString = this.toString();
     var start = funcString.indexOf('function') + 8;
     var end = funcString.indexOf('(');

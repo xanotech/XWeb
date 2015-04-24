@@ -1,4 +1,4 @@
-// xapplication JavaScript Library v1.1
+// xapplication JavaScript Library v1.2
 //
 // Copyright 2015 Xanotech LLC
 // Released under the MIT license
@@ -12,50 +12,8 @@ function XApplication() {
 
 
 
-    application.afterHashchange = function() {
-        if (typeof hashNavigator == 'undefined')
-            return;
-
-        var hash = hashNavigator.getHash();
-        application.pageQuery = XApplication.getQuery(hash);
-        hash = XApplication.getBaseUrl(hash);
-        if (!hash.toUpperCase().endsWith('.HTML'))
-            return;
-
-        application.page = XApplication.createPageObject(hash);
-
-        // If page.init exists, then set initFunc to reference it.  Or if
-        // page.init isn't defined look for a "free floating" init and set
-        // initFunc to that.  Then check to see if jquery.include is present.
-        // If it is present, call it passing initFunc as a callback.
-        // If it doesn't exist, just call initFunc (if it is set).
-        var initFunc;
-        if (application.page && typeof application.page.init == 'function')
-            initFunc = application.page.init;
-        else if (typeof init == 'function') {
-            // Once an init method is loaded by a page, it does not go away
-            // when another page is loaded.  Since we only want to call
-            // init with its page, the following logic associates
-            // the init function with the hash that spawned it.
-            // and then checks the init's hash with the current hash
-            // setting initFunc (which is what is called) only if the
-            // hash values match.
-            if (!init.hash)
-                init.hash = hash;
-            if (init.hash == hash)
-                initFunc = init;
-        } // end if-else
-        var $content = jQuery('#' + hashNavigator.contentId);
-        if (typeof $content.include == 'function')
-            $content.include(initFunc);
-        else if (initFunc)
-            initFunc();
-    } // end function
-
-
-
     application.alert = function(html, alertClass) {
-        if (typeof jQuery().emulateTransitionEnd == 'function') {
+        if (hashNavigator && typeof jQuery().emulateTransitionEnd == 'function') {
             if (!alertClass)
                 alertClass = 'alert-success';
 
@@ -76,10 +34,29 @@ function XApplication() {
     application.defaultInit = function() {
         window.onerror = application.handleJavaScriptError;
 
-        hashNavigator.afterHashchange = application.afterHashchange;
+        if (hashNavigator)
+            hashNavigator.onhashpageload = application.initPage;
 
-        $(document).ajaxComplete(application.handleAjaxCompletion);
-        $(document).ajaxError(application.handleAjaxError);
+        jQuery(document).ajaxComplete(application.handleAjaxCompletion);
+        jQuery(document).ajaxError(application.handleAjaxError);
+    } // end method
+
+
+
+    application.dispatchPageinit = function(hash) {
+        var $window = jQuery(window);
+
+        // If onpageinit is set and hasn't already been attached, register it
+        // as a handler for the content's pageinit event.
+        if (application.onpageinit && !application.onpageinit._attached) {
+            $window.on('pageinit', application.onpageinit);
+            application.onpageinit._attached = true;
+        } // end if
+
+        // Create and trigger the hashpageload event on the content element.
+        var event = jQuery.Event('pageinit');
+        event.hash = hash;
+        $window.trigger(event);
     } // end method
 
 
@@ -146,6 +123,70 @@ function XApplication() {
 
 
 
+    application.initPage = function() {
+        if (typeof hashNavigator == 'undefined')
+            return;
+
+        // Reset page and pageQuery
+        application.page = null;
+        application.pageQuery = null;
+
+        var hash = hashNavigator.getHash();
+        application.pageQuery = XApplication.getQuery(hash);
+        hash = XApplication.getBaseUrl(hash);
+
+        // If the hash (now with any "pageQuery" removed) is an HTML file,
+        // then attempt to construct a page object of the same name and
+        // assign it to application.page.
+        if (hash.toUpperCase().endsWith('.HTML'))
+            application.page = XApplication.createPageObject(hash);
+
+        // If page.init exists, then set initFunc to reference it.  Or if
+        // page.init isn't defined look for a "free floating" init and set
+        // initFunc to that.
+        var initFunc;
+        if (application.page && typeof application.page.init == 'function')
+            initFunc = application.page.init;
+        else if (typeof init == 'function') {
+            // Once an init method is loaded by a page, it does not go away
+            // when another page is loaded.  Since we only want to call
+            // init with its page, the following logic associates
+            // the init function with the hash that spawned it.
+            // and then checks the init's hash with the current hash
+            // setting initFunc (which is what is called) only if the
+            // hash values match.
+            if (!init.hash)
+                init.hash = hash;
+            if (init.hash == hash)
+                initFunc = init;
+        } // end if-else
+
+        // Define callInit, which calls initFunc (if it is definied)
+        // and then dispatches the pageinit event.
+        function callInit() {
+            if (initFunc)
+                initFunc();
+            application.dispatchPageinit(hash);
+        } // end function
+
+        // Check to see if jQuery.include is present.  If it is, call it passing
+        // callInit as a callback.  Otherwise, just call callINit.
+        var $content = jQuery('#' + hashNavigator.contentId);
+        if (typeof $content.include == 'function')
+            $content.include(callInit);
+        else
+            callInit();
+    } // end function
+
+
+
+    // Set this event handler to be called after the page is loaded and initialized.
+    // By default, it does nothing.  As an alternative, add handlers listening
+    // for the "pageinit" event via jQuery.on, addEventListener, etc.
+    application.onpageinit = null;
+
+
+
     if (!XApplication.applications)
         XApplication.applications = [];
     XApplication.applications.push(application);
@@ -165,7 +206,11 @@ XApplication.createPageObject = function(hash) {
         if (pageObjName)
             pageObjName += '.';
         pageObjName += part;
-        isDefined = eval('typeof ' + pageObjName + ';') != 'undefined';
+        try {
+            isDefined = eval('typeof ' + pageObjName + ';') != 'undefined';
+        } catch (e) {
+            isDefined = false;
+        } // end try-catch
         return isDefined;
     });
 
@@ -237,7 +282,7 @@ XApplication.wrap = function(func) {
 
 
 
-$(function() {  //This function runs only on the initial page load
+jQuery(function() {
     jQuery.each(XApplication.applications, function(index, app) {
         app.defaultInit();
         app.init();

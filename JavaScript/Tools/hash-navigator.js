@@ -1,12 +1,16 @@
+// hashNavigator JavaScript Library v1.1
+//
+// Copyright 2015 Xanotech LLC
+// Released under the MIT license
+// http://opensource.org/licenses/MIT
+
+
+
 // Captures and handles hashchange events (as setup by the jquery.ba-hashchange.js
 // library).  By default, the hashNavigator attempts to load pages / requests
 // specified after the '#' in the url whenever it changes.  If the request is
 // successful, the content is placed inside the tag with id = "Content".
 var hashNavigator = {
-    // Set this function handler to be called after the page successfully loads.
-    // By default, it does nothing.
-    afterHashchange: null,
-
     // Specifies the id of the tag to receive the data returned from the request.
     // By default, it is "Content".
     contentId: 'Content',
@@ -18,14 +22,42 @@ var hashNavigator = {
     // Sets whether caching is enabled when making requests to load a page.
     // The hashNavigator itself does no caching but if isCachingEnabled is set
     // to false, hashNavigator will attempt to bypass any caching that may be in effect.
-    isCachingEnabled: true
+    isCachingEnabled: true,
+
+    // Set this event handler to be called after the page successfully loads.
+    // By default, it does nothing.  As an alternative, add handlers listening
+    // for the "hashpageload" event via jQuery.on, addEventListener, etc.
+    onhashpageload: null
 } // end object
 
 
 
+// Dispatches a "hashpageload" event to the content element (as designated by contentId).
+// Any handler set via the onhashpageload property will be called along with any
+// handlers listening to the "hashpageload" event.
+hashNavigator.dispatchHashpageload = function(data, textStatus, request) {
+    var $window = jQuery(window);
+
+    // If onhashpageload is set and hasn't already been added, register it
+    // as a handler for the content's hashpageload event.
+    if (hashNavigator.onhashpageload && !hashNavigator.onhashpageload._attached) {
+        $window.on('hashpageload', hashNavigator.onhashpageload);
+        hashNavigator.onhashpageload._attached = true;
+    } // end if
+
+    // Create and trigger the hashpageload event on the content element.
+    var event = jQuery.Event('hashpageload');
+    event.data = data;
+    event.textStatus = textStatus;
+    event.request = request;
+    $window.trigger(event);
+} // end function
+
+
+
 // Returns the hash (the text following the '#' or '#!' of the current URL).
-// If no there is no hash, the defaultHash is returned.  The onHashchange
-// method uses this method when calling loadHashPage.
+// If no there is no hash, the defaultHash is returned.  The hashchange event handler
+// uses the results from getHash and passes it to loadHashPage.
 hashNavigator.getHash = function() {
     var hash = window.location.hash;
 
@@ -46,14 +78,15 @@ hashNavigator.getHash = function() {
 
 
 
-// By default, this method is called by onHashchange whenever the hash
-// changes.  It requests whatever is listed in the hash and applies the result
-// to the tag specified by contentId and calls afterHashchange if it is defined.
+// By default, this method is called whenever the hash changes.  It loads (via
+// AJAX request) whatever is listed in the hash and applies the result to
+// the tag specified by contentId.  It then dispatches a "hashpageload"
+// event on the contentId element.
 hashNavigator.loadHashPage = function(hash) {
-    $.ajax({ url: hash, cache: this.isCachingEnabled }).done(function(data) {
-        var $content = $('#' + hashNavigator.contentId);
+    jQuery.ajax({ url: hash, cache: this.isCachingEnabled }).done(function(data) {
+        var $content = jQuery('#' + hashNavigator.contentId);
         if (!$content.length) {
-            $content = $('#' + hashNavigator.contentId.toLowerCase())
+            $content = jQuery('#' + hashNavigator.contentId.toLowerCase())
             if ($content.length)
                 hashNavigator.contentId = hashNavigator.contentId.toLowerCase();
         } // end if
@@ -67,8 +100,12 @@ hashNavigator.loadHashPage = function(hash) {
             var bodyEnd = lowerText.indexOf('</body');
             text = text.substring(bodyStart, bodyEnd);
         } // end if
-        $('#' + hashNavigator.contentId).html(text);
+        jQuery('#' + hashNavigator.contentId).html(text);
     }).always(function(data, textStatus, request) {
+        // If data.done and data.promise are functions, that means that
+        // data and request need to be swapped.  This can happen in various
+        // scenarios depending on whether or not the ajax call succeeded
+        // or failed and the version of jQuery present.
         if (typeof data.done == 'function' &&
             typeof data.promise == 'function') {
             var temp = data; // request (disguised as data) moved to temp
@@ -76,23 +113,38 @@ hashNavigator.loadHashPage = function(hash) {
             var request = temp; // request (stored in temp) moved to request
         } // end if
 
-        if (typeof hashNavigator.afterHashchange == 'function')
-            hashNavigator.afterHashchange.call(null, data, textStatus, request);
+        hashNavigator.dispatchHashpageload(data, textStatus, request);
     });
 } // end function
 
 
 
-// By default, this method is called whenever the value of the hash changes,
-// parses out the content of the hash and calls loadHashPage.
-hashNavigator.onHashchange = function() {
-    hashNavigator.loadHashPage(hashNavigator.getHash());
+hashNavigator.monitorHash = function() {
+    // Check if hashchange event is supported natively.  If so,
+    // clear the monitoryHash.interval and return.  Your work here is done.
+    if ('onhashchange' in window) {
+        window.clearInterval(hashNavigator.monitorHash.interval);
+        return;
+    } // end if
+
+    var hash = window.location.hash;
+    if (hash == hashNavigator.monitorHash.lastHash)
+        return;
+
+    hashNavigator.monitorHash.lastHash = hash;
+    $window.trigger('hashchange');
 } // end function
 
 
 
-$(function() {
+jQuery(function() {
     // Register the hashchange event hander and trigger the event
-    $(window).hashchange(hashNavigator.onHashchange);
-    $(window).hashchange();
+    var $window = jQuery(window);
+    $window.on('hashchange', function() {
+        hashNavigator.loadHashPage(hashNavigator.getHash());
+    });
+    $window.trigger('hashchange');
+
+    hashNavigator.monitorHash.lastHash = window.location.hash;
+    hashNavigator.monitorHash.interval = window.setInterval(hashNavigator.monitorHash, 200);
 });

@@ -1,4 +1,4 @@
-// xrepository JavaScript Library v0.5
+// xrepository JavaScript Library v0.6
 // http://xrepository.com/
 //
 // Copyright 2015 Xanotech LLC
@@ -195,6 +195,18 @@ XRepository.Cursor.prototype.hasNext = function() {
 
 
 
+XRepository.Cursor.prototype.join = function() {
+    this.data = null;
+    var joinObjs = this.joinObjects || {};
+    jQuery.each(arguments, function(index, arg) {
+        
+    });
+    this.joinObjects = joinObjs;
+    return this;
+} // end function
+
+
+
 XRepository.Cursor.prototype.limit = function(rows) {
     if (arguments.length == 0)
         return this.cursorData.limit;
@@ -279,9 +291,10 @@ XRepository.Cursor.prototype.sort = function(sortObj) {
 
     if (arguments > 1) {
         sortObj = [];
-        for (var a = 0; a < arguments.length; a++)
-            if (arguments[a])
-                sortObj.push(arguments[a]);
+        jQuery.each(arguments, function(index, arg) {
+            if (arg)
+                sortObj.push(arg);
+        });
     } // end if
 
     sortObj = this._validateSortObj(sortObj);
@@ -488,66 +501,78 @@ XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, colu
 
 
 
-XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, methodName) {
+XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, propertyName) {
     XRepository._validateRequiredLibraries();
     this._validateTypeParameter('source', source);
     this._validateTypeParameter('target', target);
 
-    if (!methodName) {
-        methodName = target.getName();
+    if (!propertyName) {
+        propertyName = target.getName();
         if (typeof owl != 'undefined' && owl.pluralize)
-            methodName = owl.pluralize(methodName);
+            propertyName = owl.pluralize(propertyName);
         else {
-            if (methodName.endsWith('s'))
-                methodName += 'es';
+            if (propertyName.endsWith('s'))
+                propertyName += 'es';
             else
-                methodName += 's';
+                propertyName += 's';
         } // end if
-        methodName = 'get' + methodName;
+        propertyName = propertyName.charAt(0).toLowerCase() + propertyName.slice(1);
     } // end if
 
     var repo = this;
-    source.prototype[methodName] = function() {
-        var objects = this['_' + methodName];
-        if (objects)
-            return objects;
+    if (Object.defineProperty)
+        Object.defineProperty(source.prototype, propertyName, {
+            get: function() {
+                var objects = this['_' + propertyName];
+                if (objects)
+                    return objects;
 
-        var criteria = {};
-        if (!foreignKey)
-            foreignKey = repo._findForeignKeyColumn(source, target);
-        criteria[foreignKey] = this[repo._getIdColumn(source)];
-        objects = repo.sync.find(target, criteria).toArray();
-        this['_' + methodName] = objects;
-        return objects;
-    } // end function
+                var criteria = {};
+                if (!foreignKey)
+                    foreignKey = repo._findForeignKeyColumn(source, target);
+                criteria[foreignKey] = this[repo._getIdColumn(source)];
+                objects = repo.sync.find(target, criteria).toArray();
+                this['_' + propertyName] = objects;
+                return objects;
+            },
+            set: function(objects) {
+                this['_' + propertyName] = objects;
+            }
+        });
 } // end function
 
 
 
-XRepository.JSRepository.prototype.mapSingleReference = function(source, target, foreignKey, methodName) {
+XRepository.JSRepository.prototype.mapSingleReference = function(source, target, foreignKey, propertyName) {
     XRepository._validateRequiredLibraries();
     this._validateTypeParameter('source', source);
     this._validateTypeParameter('target', target);
 
-    if (!methodName) {
-        methodName = target.getName();
-        methodName = 'get' + methodName;
+    if (!propertyName) {
+        propertyName = target.getName();
+        propertyName = propertyName.charAt(0).toLowerCase() + propertyName.slice(1);
     } // end if
 
     var repo = this;
-    source.prototype[methodName] = function() {
-        var objects = this['_' + methodName];
-        if (objects)
-            return objects[0] || null;
+    if (Object.defineProperty)
+        Object.defineProperty(source.prototype, propertyName, {
+            get: function() {
+                var objects = this['_' + propertyName];
+                if (objects)
+                    return objects[0] || null;
 
-        var criteria = {};
-        if (!foreignKey)
-            foreignKey = repo._findForeignKeyColumn(target, source);
-        criteria[repo._getIdColumn(target)] = this[foreignKey];
-        var objects = repo.sync.find(target, criteria).toArray();
-        this['_' + methodName] = objects;
-        return objects[0] || null;
-    } // end function
+                var criteria = {};
+                if (!foreignKey)
+                    foreignKey = repo._findForeignKeyColumn(target, source);
+                criteria[repo._getIdColumn(target)] = this[foreignKey];
+                var objects = repo.sync.find(target, criteria).toArray();
+                this['_' + propertyName] = objects;
+                return objects[0] || null;
+            },
+            set: function(object) {
+                this['_' + propertyName] = [object];
+            }
+        });
 } // end function
 
 
