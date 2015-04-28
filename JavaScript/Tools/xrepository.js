@@ -586,7 +586,7 @@ XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
     var tableNames = [];
     var baseType = type.getBase();
     if (baseType != Object)
-        tableNames = tableNames.concat(this._getTableNames(baseType));
+        tableNames = tableNames.concat(this._getTableNames(baseType, true));
     tableNames.push(tableName);
     this._internal.tableNameCache[type.getName()] = tableNames;
 } // end function
@@ -938,7 +938,7 @@ XRepository.JSRepository.prototype._getTableDefinition = function(tableName) {
 
 
 
-XRepository.JSRepository.prototype._getTableNames = function(type) {
+XRepository.JSRepository.prototype._getTableNames = function(type, isSilent) {
     var typeName = type.getName();
     if (this._internal.tableNameCache[typeName])
         return this._internal.tableNameCache[typeName];
@@ -953,7 +953,7 @@ XRepository.JSRepository.prototype._getTableNames = function(type) {
         else
             type = Object;
     } // end while
-    if (!tableNames.length)
+    if (!tableNames.length && !isSilent)
         throw new Error('There are no tables associated with "' + typeName + '".')
 
     tableNames.reverse();
