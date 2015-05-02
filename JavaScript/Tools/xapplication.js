@@ -4,20 +4,19 @@
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
 
+"use strict";
+
 
 
 function XApplication() {
-
     var application = this;
 
 
 
     application.alert = function(html, alertClass) {
-        if (hashNavigator && typeof jQuery().emulateTransitionEnd == 'function') {
-            if (!alertClass)
-                alertClass = 'alert-success';
-
-            var alertHtml = '<div class="alert alert-dismissable ' + alertClass + '">' +
+        if (typeof hashNavigator != 'undefined' &&
+            typeof jQuery().emulateTransitionEnd == 'function') {
+            var alertHtml = '<div class="alert alert-dismissable ' + (alertClass || 'alert-success') + '">' +
                 '<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>' +
                 html + '</div>';
             jQuery('#' + hashNavigator.contentId).prepend(alertHtml);
@@ -34,7 +33,7 @@ function XApplication() {
     application.defaultInit = function() {
         window.onerror = application.handleJavaScriptError;
 
-        if (hashNavigator)
+        if (typeof hashNavigator != 'undefined')
             hashNavigator.onhashpageload = application.initPage;
 
         jQuery(document).ajaxComplete(application.handleAjaxCompletion);
@@ -155,8 +154,7 @@ function XApplication() {
             // and then checks the init's hash with the current hash
             // setting initFunc (which is what is called) only if the
             // hash values match.
-            if (!init.hash)
-                init.hash = hash;
+            init.hash = init.hash || hash;
             if (init.hash == hash)
                 initFunc = init;
         } // end if-else
@@ -187,10 +185,8 @@ function XApplication() {
 
 
 
-    if (!XApplication.applications)
-        XApplication.applications = [];
+    XApplication.applications = XApplication.applications || [];
     XApplication.applications.push(application);
-
 } // end function
 
 

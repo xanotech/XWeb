@@ -1,4 +1,14 @@
-﻿// Used for setting up rudamentary inheritance with Javascript.  To use, two
+﻿// inheritance JavaScript Library v1.0
+//
+// Copyright 2015 Xanotech LLC
+// Released under the MIT license
+// http://opensource.org/licenses/MIT
+
+"use strict";
+
+
+
+// Used for setting up rudamentary inheritance with Javascript.  To use, two
 // calls are necessary.  Consider the example of Cat inheriting from Animal...
 // function Cat() {
 //     Animal.call(this);
@@ -13,8 +23,7 @@ Function.prototype.inherit = function(base) {
     newConstructor.prototype = base.prototype;
     this.prototype = new newConstructor();
     this._base = base;
-    if (!base._subTypes)
-        base._subTypes = [];
+    base._subTypes = base._subTypes || [];
     base._subTypes.push(this);
 } // end function
 

@@ -4,6 +4,8 @@
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
 
+"use strict";
+
 
 
 // Captures and handles hashchange events (as setup by the jquery.ba-hashchange.js
@@ -70,8 +72,7 @@ hashNavigator.getHash = function() {
         hash = hash.substring(1);
 
     // If a hash is not present, then use the defaultHash
-    if (!hash)
-        hash = hashNavigator.defaultHash;
+    hash = hash || hashNavigator.defaultHash;
 
     return hash;
 } // end function

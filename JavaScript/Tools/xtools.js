@@ -4,6 +4,8 @@
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
 
+"use strict";
+
 
 
 Array.prototype.indexOf = Array.prototype.indexOf || function(searchElement, fromIndex) {
@@ -11,6 +13,14 @@ Array.prototype.indexOf = Array.prototype.indexOf || function(searchElement, fro
         if (this[i] === searchElement)
             return i;
     return -1;
+} // end function
+
+
+
+Array.prototype.pushArray = function() {
+    var toPush = this.concat.apply([], arguments);
+    for (var i = 0, len = toPush.length; i < len; i++)
+        this.push(toPush[i]);
 } // end function
 
 
@@ -99,6 +109,17 @@ Function.prototype.getName = function() {
 
 
 
+// Checks to see if the arguement is of the calling type.
+// String.is('abc'); // returns true
+// Function.is(5); // returns true
+// Date.is('1/1/2000') // returns false since the arguement is a String
+Function.prototype.is = function(obj) {
+    return obj != undefined && obj != null &&
+        (obj.constructor == this || obj instanceof this);
+} // end function
+
+
+
 Object.isBasic = function(obj) {
     if (typeof obj == 'undefined' || obj == null)
         return false;
@@ -126,7 +147,10 @@ String.prototype.endsWith = String.prototype.endsWith || function(str) {
 
 
 String.prototype.is = String.prototype.is || function(str) {
-    if (!_(str).isString())
+    if (typeof str == 'undefined' || !str.toString)
+        return false;
+
+    if (!String.is(str))
         str = str.toString();
     return this.toUpperCase() == str.toUpperCase();
 } // end function

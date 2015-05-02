@@ -1,3 +1,13 @@
+// jquery.include jQuery Plugin v1.0
+//
+// Copyright 2015 Xanotech LLC
+// Released under the MIT license
+// http://opensource.org/licenses/MIT
+
+"use strict";
+
+
+
 // Performs a c-style #include ajax load of any tags containing a data-include
 // attribute.  The value of the attribute should be the url of the content to
 // be loaded.  The load is recursive such that any content loaded that contains
