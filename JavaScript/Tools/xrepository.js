@@ -300,10 +300,7 @@ XRepository.Cursor.prototype.sort = function(sortObj) {
         return this.cursorData.sort;
 
     this.data = null;
-    if (arguments.length = 0 || !sortObj)
-        sortObj = null;
-
-    if (arguments > 1) {
+    if (arguments.length > 1) {
         sortObj = [];
         jQuery.each(arguments, function(index, arg) {
             if (arg)
@@ -314,13 +311,15 @@ XRepository.Cursor.prototype.sort = function(sortObj) {
     sortObj = this._validateSortObj(sortObj);
     if (sortObj)
         jQuery.each(sortObj, function(property, value) {
-            if (Number.is(value)) {
-                if (value > 0)
-                    value = 1;
-                else if (value < 0)
-                    value = -1;
-            } else
-                sortObj[property] = value ? 1 : 0;
+            if (Boolean.is(value))
+                value = value ? 1 : -1;
+            if (!Number.is(value))
+                return;
+
+            if (value > 0)
+                sortObj[property] = 1;
+            else if (value < 0)
+                sortObj[property] = -1;
         });
     this.cursorData.sort = sortObj;
     return this;
@@ -379,7 +378,7 @@ XRepository.Cursor.prototype._validateSortObj = function(sortObj) {
     if (!isValid)
         throw new Error('Error in JSRepository.sort: sortObj argument was not valid.  ' +
             'The sortObj argument must be a String, an array of Strings, ' +
-            'or an object where properties are numbers\n' +
+            'or an object where properties are Booleans or Numbers\n' +
             '(typeof sortObj = ' + typeof sortObj + ', sortObj = ' + JSON.stringify(sortObj) + ').');
     return sortObj;
 } // end function
