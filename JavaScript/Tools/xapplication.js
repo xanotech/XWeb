@@ -103,13 +103,15 @@ function XApplication() {
             stack = errorObj.stack;
         if (!stack) {
             stack = file + ' (line ' + line + ')';
-            var stackArray = [];
-            var func = arguments.callee.caller;
-            while (func) {
-                stackArray.push(func.getName() || '(anonymous)');
-                func = func.caller;
-            } // end while
-            stack += '\n' + stackArray.join('\n');
+
+            // *** Removing since callee & caller are deprecated. ***
+            //var stackArray = [];
+            //var func = arguments.callee.caller;
+            //while (func) {
+            //    stackArray.push(func.getName() || '(anonymous)');
+            //    func = func.caller;
+            //} // end while
+            //stack += '\n' + stackArray.join('\n');
         } // end if
 
         application.handleError(message, stack);

@@ -50,6 +50,19 @@ XRepository.Criterion.create = function(obj) {
 
 
 
+XRepository.Criterion.getBasicArray = function(criterion) {
+    if (!Array.is(criterion))
+        return;
+
+    for (var c = 0; c < criterion.length; c++)
+        if (!Object.isBasic(criterion[c]))
+            return;
+
+    return criterion;
+} // end function
+
+
+
 XRepository.Criterion.prototype._fixOperation = function() {
     if (!this.Operation) {
         this.Operation = 'EqualTo';
@@ -100,42 +113,6 @@ XRepository.Criterion.prototype._fixOperation = function() {
 
 
 XRepository.Cursor = function(type, criteria, repository) {
-    // If criteria is a function, go ahead and call it (the caller must be
-    // trying to do something clever).  But if its still a function after that,
-    // just set criteria to null because functions just won't cut it as criteria.
-    if (typeof criteria == 'function')
-        criteria = criteria();
-    if (typeof criteria == 'function')
-        criteria = null;
-
-    if (Object.isBasic(criteria)) {
-        var idColumn = repository._getIdColumn(type);
-        if (!idColumn) {
-            var value = '' + criteria;
-            if (String.is(criteria) || Date.is(criteria))
-                value = '"' + value + '"';
-            var methodName = arguments.callee.caller.getName();
-            throw new Error('Error in JSRepository.' + methodName + ': ' + methodName + '(' +
-                type.getName() + ', ' + JSON.stringify(value) +
-                ') method cannot be used for ' + type.getName() +
-                ' because does not have a single column primary key.');
-        } // end if
-        criteria = new XRepository.Criterion(idColumn, criteria);
-    } // end if
-
-    criteria = criteria || [];
-    if (XRepository.Criterion.is(criteria))
-        criteria = [criteria];
-
-    if (Array.is(criteria))
-        this._validateCriterionArray(criteria);
-    else
-        criteria = XRepository.Criterion.create(criteria);
-
-    jQuery.each(criteria, function(index, criterion) {
-        criterion.Name = repository._getMappedColumn(type, criterion.Name);
-    });
-
     this.type = type;
     this.repository = repository;
     this.data = null;
@@ -342,19 +319,6 @@ XRepository.Cursor.prototype.toArray = function() {
 
 
 
-XRepository.Cursor.prototype._validateCriterionArray = function(array) {
-    jQuery.each(array, function(index, element) {
-        if (XRepository.Criterion.is(element))
-            return;
-        if (!element['Name'] || !element['Operation'])
-            throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() + ': element ' + index +
-                ' in criteria array missing Name and / or Operation properties\n' +
-                '(element = ' + JSON.stringify(element) + ').');
-    });
-} // end function
-
-
-
 XRepository.Cursor.prototype._validateSortObj = function(sortObj) {
     if (!sortObj)
         return sortObj;
@@ -430,7 +394,8 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 XRepository.JSRepository.prototype.count = function(type, criteria) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type);
+    this._validateTypeArgument('type', type, 'count');
+    criteria = this._validateCriteria(type, criteria, 'find');
     var cursor = new XRepository.Cursor(type, criteria, this)
 
     jQuery.each(cursor.cursorData.criteria, function(index, criterion) {
@@ -460,7 +425,7 @@ XRepository.JSRepository.prototype.count = function(type, criteria) {
 // defined by the server will be present (although initialized to null).
 XRepository.JSRepository.prototype.create = function(type) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type);
+    this._validateTypeArgument('type', type, 'create');
     var tableNames = this._getTableNames(type);
     var obj = new type();
     obj._tableNames = tableNames;
@@ -479,7 +444,8 @@ XRepository.JSRepository.prototype.create = function(type) {
 
 XRepository.JSRepository.prototype.find = function(type, criteria) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type);
+    this._validateTypeArgument('type', type, 'find');
+    criteria = this._validateCriteria(type, criteria, 'find');
     return new XRepository.Cursor(type, criteria, this);
 } // end function
 
@@ -502,7 +468,7 @@ XRepository.JSRepository.prototype.findOne = function(type, criteria) {
 
 XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, columnName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type);
+    this._validateTypeArgument('type', type, 'mapColumn');
     if (!String.is(propertyName))
         throw new Error('Error in JSRepository.mapColumn: propertyName argument is missing or is not a String.');
     if (!String.is(columnName))
@@ -518,8 +484,8 @@ XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, colu
 
 XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, propertyName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('source', source);
-    this._validateTypeArgument('target', target);
+    this._validateTypeArgument('source', source, 'mapMultipleReference');
+    this._validateTypeArgument('target', target, 'mapMultipleReference');
 
     if (!propertyName) {
         propertyName = target.getName();
@@ -563,8 +529,8 @@ XRepository.JSRepository.prototype.mapMultipleReference = function(source, targe
 
 XRepository.JSRepository.prototype.mapSingleReference = function(source, target, foreignKey, propertyName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('source', source);
-    this._validateTypeArgument('target', target);
+    this._validateTypeArgument('source', source, 'mapSingleReference');
+    this._validateTypeArgument('target', target, 'mapSingleReference');
 
     if (!propertyName) {
         propertyName = target.getName();
@@ -599,7 +565,7 @@ XRepository.JSRepository.prototype.mapSingleReference = function(source, target,
 
 XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type);
+    this._validateTypeArgument('type', type, 'mapTable');
     if (!String.is(tableName))
         throw new Error('Error in JSRepository.mapTable: tableName argument is missing or is not a String.');
 
@@ -637,7 +603,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     if (!Array.is(objects))
         objects = [objects];
 
-    this._validateEntityArray(objects);
+    this._validateEntityArray(objects, 'remove');
     this._applyTableNames(objects);
     objects = this._removeExtraneousProperties(objects);
     this._fixDateObjects(objects);
@@ -679,7 +645,7 @@ XRepository.JSRepository.prototype.save = function(objects) {
     if (!Array.is(objects))
         objects = [objects];
 
-    this._validateEntityArray(objects);
+    this._validateEntityArray(objects, 'save');
     this._applyTableNames(objects);
     var cleanObjects = this._removeExtraneousProperties(objects);
     this._fixDateObjects(cleanObjects);
@@ -1112,16 +1078,74 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
 
 
 
-XRepository.JSRepository.prototype._validateEntityArray = function(objects) {
+XRepository.JSRepository.prototype._validateCriteria = function(type, criteria, methodName) {
+    // If criteria is a function, go ahead and call it (the caller must be
+    // trying to do something clever).  But if its still a function after that,
+    // just set criteria to null because functions just won't cut it as criteria.
+    if (typeof criteria == 'function')
+        criteria = criteria();
+    if (typeof criteria == 'function')
+        criteria = null;
+
+    var basicArray = XRepository.Criterion.getBasicArray(criteria);    
+    if (Object.isBasic(criteria) || basicArray) {
+        var idColumn = this._getIdColumn(type);
+        if (!idColumn) {
+            var valueStr = basicArray ? '[list-of-values]' : '' + criteria;
+
+            if (String.is(criteria) || Date.is(criteria))
+                valueStr = '"' + valueStr + '"';
+
+            throw new Error('Error in JSRepository.' + methodName + ': ' + methodName + '(' +
+                type.getName() + ', ' + JSON.stringify(valueStr) +
+                ') method cannot be used for ' + type.getName() +
+                ' because does not have a single column primary key.');
+        } // end if
+        criteria = new XRepository.Criterion(idColumn, criteria);
+    } // end if
+
+    criteria = criteria || [];
+    if (XRepository.Criterion.is(criteria))
+        criteria = [criteria];
+
+    if (Array.is(criteria))
+        this._validateCriterionArray(criteria, methodName);
+    else
+        criteria = XRepository.Criterion.create(criteria);
+
+    var repo = this;
+    jQuery.each(criteria, function(index, criterion) {
+        criterion.Name = repo._getMappedColumn(type, criterion.Name);
+    });
+
+    return criteria;
+} // end function
+
+
+
+XRepository.JSRepository.prototype._validateCriterionArray = function(array, methodName) {
+    jQuery.each(array, function(index, element) {
+        if (XRepository.Criterion.is(element))
+            return;
+        if (!element['Name'] || !element['Operation'])
+            throw new Error('Error in JSRepository.' + methodName + ': element ' + index +
+                ' in criteria array missing Name and / or Operation properties\n' +
+                '(element = ' + JSON.stringify(element) + ').');
+    });
+} // end function
+
+
+
+XRepository.JSRepository.prototype._validateEntityArray = function(objects, methodName) {
     jQuery.each(objects, function(index, obj) {
         if (Object.isBasic(obj))
-            throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() +
+            throw new Error('Error in JSRepository.' + methodName +
                 ': element ' + index + ' in objects' +
                 'array argument cannot be a basic type but must instead be an entity object\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').');
         else if (!obj)
-            throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() +
+            throw new Error('Error in JSRepository.' + methodName +
                 ': element ' + index + ' in objects array argument is null or undefined\n' +
                 '(typeof objects[' + index + '] = ' + typeof obj +
                 ', objects[' + index + '] = ' + JSON.stringify(obj) + ').');
@@ -1155,9 +1179,9 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest, met
 
 
 
-XRepository.JSRepository.prototype._validateTypeArgument = function(argumentName, argument) {
+XRepository.JSRepository.prototype._validateTypeArgument = function(argumentName, argument, methodName) {
     if (typeof argument != 'function')
-        throw new Error('Error in JSRepository.' + arguments.callee.caller.getName() +
+        throw new Error('Error in JSRepository.' + methodName +
             ': ' + argumentName + ' argument was not initialized or was not a function\n' +
             '(typeof ' + argumentName + ' = ' + typeof argument +
             ', ' + argumentName + ' = ' + JSON.stringify(argument) + ').');
