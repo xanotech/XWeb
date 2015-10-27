@@ -1,4 +1,4 @@
-// xrepository JavaScript Library v0.6
+// xrepository JavaScript Library v0.7
 // http://xrepository.com/
 //
 // Copyright 2015 Xanotech LLC
@@ -395,7 +395,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 XRepository.JSRepository.prototype.count = function(type, criteria) {
     XRepository._validateRequiredLibraries();
     this._validateTypeArgument('type', type, 'count');
-    criteria = this._validateCriteria(type, criteria, 'find');
+    criteria = this._validateCriteria(type, criteria, 'count');
     var cursor = new XRepository.Cursor(type, criteria, this)
 
     jQuery.each(cursor.cursorData.criteria, function(index, criterion) {
@@ -404,6 +404,7 @@ XRepository.JSRepository.prototype.count = function(type, criteria) {
     var request = jQuery.ajax(this.path.root + '/' + this.path.count, {
         async: !this.isSynchronized,
         cache: false,
+        method: 'POST',
         data: {
             tableNames: JSON.stringify(this._getTableNames(cursor.type)),
             cursor: JSON.stringify(cursor.cursorData)
@@ -610,8 +611,8 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     var request = jQuery.ajax(this.path.root + '/' + this.path.remove, {
         async: !this.isSynchronized,
         cache: false,
-        data: { data: JSON.stringify(objects) },
-        type: 'POST'
+        method: 'POST',
+        data: { data: JSON.stringify(objects) }
     });
     var repo = this;
     return this._handleResponse(request, function() {
@@ -652,8 +653,8 @@ XRepository.JSRepository.prototype.save = function(objects) {
     var request = jQuery.ajax(this.path.root + '/' + this.path.save, {
         async: !this.isSynchronized,
         cache: false,
-        data: { data: JSON.stringify(cleanObjects) },
-        type: 'POST'
+        method: 'POST',
+        data: { data: JSON.stringify(cleanObjects) }
     });
     var repo = this;
     return this._handleResponse(request, function() {
@@ -782,20 +783,34 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
     jQuery.each(cursor.cursorData.criteria, function(index, criterion) {
         criterion._fixOperation();
     });
+
+    var repo = this;
+
+    var origSort = cursor.cursorData.sort;
+    if (cursor.cursorData.sort) {
+        cursor.cursorData.sort = {};
+        jQuery.each(origSort, function(property, value) {
+            cursor.cursorData.sort[repo._getMappedColumn(cursor.type, property)] = value;
+        });
+    } // end if
+    var cursorDataJson = JSON.stringify(cursor.cursorData);
+    cursor.cursorData.sort = origSort;
+
     var request = jQuery.ajax(this.path.root + '/' + this.path.fetch, {
         async: !this.isSynchronized,
         cache: false,
+        method: 'POST',
         data: {
             tableNames: JSON.stringify(this._getTableNames(cursor.type)),
-            cursor: JSON.stringify(cursor.cursorData)
+            cursor: cursorDataJson
         }
     });
-    var repo = this;
+
     return this._handleResponse(request, function() {
         repo._validateResponse(request, 'toArray');
         var objs = JSON.parse(request.responseText);
-        repo._convert(objs, cursor.type);
         repo._fixDateStrings(objs);
+        repo._convert(objs, cursor.type);
         repo._applyJoinObjects(objs, cursor);
         return objs;
     });
@@ -910,6 +925,7 @@ XRepository.JSRepository.prototype._getCachedValue = function(cache, tableName, 
     var request = jQuery.ajax(lookupPath, {
         async: false,
         cache: false,
+        method: 'POST',
         data: { tableName: tableName }
     });
     this._validateResponse(request);
