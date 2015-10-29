@@ -1,4 +1,4 @@
-// hashNavigator JavaScript Library v1.1
+// hashNavigator JavaScript Library v1.2
 //
 // Copyright 2015 Xanotech LLC
 // Released under the MIT license
@@ -11,11 +11,11 @@
 // Captures and handles hashchange events (as setup by the jquery.ba-hashchange.js
 // library).  By default, the hashNavigator attempts to load pages / requests
 // specified after the '#' in the url whenever it changes.  If the request is
-// successful, the content is placed inside the tag with id = "Content".
+// successful, the content is placed inside the tag with id = "content".
 var hashNavigator = {
     // Specifies the id of the tag to receive the data returned from the request.
-    // By default, it is "Content".
-    contentId: 'Content',
+    // By default, it is "content".
+    contentId: 'content',
 
     // Specifies the hash value to be requested if the hash is ever empty or missing.
     // By default, it is "Home.html".
@@ -85,13 +85,7 @@ hashNavigator.getHash = function() {
 // event on the contentId element.
 hashNavigator.loadHashPage = function(hash) {
     jQuery.ajax({ url: hash, cache: this.isCachingEnabled }).done(function(data) {
-        var $content = jQuery('#' + hashNavigator.contentId);
-        if (!$content.length) {
-            $content = jQuery('#' + hashNavigator.contentId.toLowerCase())
-            if ($content.length)
-                hashNavigator.contentId = hashNavigator.contentId.toLowerCase();
-        } // end if
-        $content.html(data);
+        jQuery('#' + hashNavigator.contentId).html(data);
     }).fail(function(request) {
         var text = request.responseText;
         var lowerText = text.toLowerCase();
