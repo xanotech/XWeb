@@ -63,55 +63,6 @@ XRepository.Criterion.getBasicArray = function(criterion) {
 
 
 
-XRepository.Criterion.prototype._fixOperation = function() {
-    if (!this.Operation) {
-        this.Operation = 'EqualTo';
-        return;
-    } // end if
-
-    this.Operation = this.Operation.trim();
-
-    switch (this.Operation.toUpperCase()) {
-        case '=':
-        case '==':
-        case 'EQUALTO':
-            this.Operation = 'EqualTo';
-            break;
-        case '>':
-        case 'GREATERTHAN':
-            this.Operation = 'GreaterThan';
-            break;
-        case '>=':
-        case 'GREATERTHANOREQUALTO':
-            this.Operation = 'GreaterThanOrEqualTo';
-            break;
-        case '<':
-        case 'LESSTHAN':
-            this.Operation = 'LessThan';
-            break;
-        case '<=':
-        case 'LESSTHANOREQUALTO':
-            this.Operation = 'LessThanOrEqualTo';
-            break;
-        case '<>':
-        case '!=':
-        case 'NOTEQUALTO':
-            this.Operation = 'NotEqualTo';
-            break;
-        case 'LIKE':
-            this.Operation = 'Like';
-            break;
-        case 'NOT LIKE':
-            this.Operation = 'NotLike';
-            break;
-        default:
-            throw new Error('OperationType string "' + str + '" is invalid.  ' +
-                'Acceptable values are: =, >, >=, <, <=, !=, LIKE, NOT LIKE (== and <> are also accepted).');
-    } // end switch
-} // end function
-
-
-
 XRepository.Cursor = function(type, criteria, repository) {
     this.type = type;
     this.repository = repository;
@@ -119,6 +70,7 @@ XRepository.Cursor = function(type, criteria, repository) {
     this.index = 0;
 
     this.cursorData = {};
+    this.cursorData.columns = null;
     this.cursorData.criteria = criteria;
     this.cursorData.limit = null;
     this.cursorData.skip = null;
@@ -364,6 +316,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     this._internal.tableDefinitionCache = {};
     this._internal.tableNameCache = {};
     this.isSynchronized = isSynchronized;
+    this.isUsingLikeForEquals = false;
 
     // Setup default paths
     this.path = {};
@@ -392,15 +345,32 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
 
+XRepository.JSRepository.prototype.convertStringToDate = function(string) {
+    // Look for ISO 8601 dates (2013-10-28T16:38:30Z) and "quasi" ISO 8601 dates (2013-10-28 16:38:30Z).
+    if (string.length == 20 && string[4] == '-' && string[7] == '-' &&
+        string[13] == ':' && string[16] == ':' && string[19] == 'Z') {
+        var m = moment.utc(string);
+        if (m.isValid())
+            return new Date(m.year(), m.month(), m.date(),
+                m.hour(), m.minute(), m.second(), m.millisecond());
+
+    // Look for funky Microsoft JSON dates (stupid Microsoft): /Date(946702800000)/
+    } else if (string.startsWith('/Date(') && string.endsWith(')/') &&
+        !isNaN(string.substring(6, string.length - 2))) {
+        var time = parseInt(string.substring(6));
+        return new Date(time);
+    } // end if-else
+} // end function
+
+
+
 XRepository.JSRepository.prototype.count = function(type, criteria) {
     XRepository._validateRequiredLibraries();
     this._validateTypeArgument('type', type, 'count');
     criteria = this._validateCriteria(type, criteria, 'count');
     var cursor = new XRepository.Cursor(type, criteria, this)
 
-    jQuery.each(cursor.cursorData.criteria, function(index, criterion) {
-        criterion._fixOperation();
-    });
+    cursor.cursorData.criteria = this._fixCriteria(cursor.cursorData.criteria);
     var request = jQuery.ajax(this.path.root + '/' + this.path.count, {
         async: !this.isSynchronized,
         cache: false,
@@ -475,6 +445,9 @@ XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, colu
     if (!String.is(columnName))
         throw new Error('Error in JSRepository.mapColumn: columnName argument is missing or is not a String.');
 
+    if (!this._isValidColumn(type, columnName))
+        throw new Error('The columnName "' + columnName + '" does not exist.');
+
     var typeName = type.getName();
     columnName = columnName.toUpperCase();
     this._internal.columnMapCache[typeName] = this._internal.columnMapCache[typeName] || {}
@@ -489,15 +462,7 @@ XRepository.JSRepository.prototype.mapMultipleReference = function(source, targe
     this._validateTypeArgument('target', target, 'mapMultipleReference');
 
     if (!propertyName) {
-        propertyName = target.getName();
-        if (typeof owl != 'undefined' && owl.pluralize)
-            propertyName = owl.pluralize(propertyName);
-        else {
-            if (propertyName.endsWith('s'))
-                propertyName += 'es';
-            else
-                propertyName += 's';
-        } // end if
+        propertyName = this.pluralize(target.getName());
         propertyName = propertyName.charAt(0).toLowerCase() + propertyName.substring(1);
     } // end if
 
@@ -570,6 +535,8 @@ XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
     if (!String.is(tableName))
         throw new Error('Error in JSRepository.mapTable: tableName argument is missing or is not a String.');
 
+    this._getTableDefinition(tableName); // Validates passed tableName
+
     var tableNames = [];
     var baseType = type.getBase();
     if (baseType != Object)
@@ -577,6 +544,19 @@ XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
     tableNames.push(tableName);
     this._internal.tableNameCache[type.getName()] = tableNames;
 } // end function
+
+
+
+XRepository.JSRepository.prototype.pluralize = function(word) {
+    if (typeof owl != 'undefined' && owl.pluralize)
+        return owl.pluralize(word);
+    else if (word.endsWith('s') || word.endsWith('x'))
+        return word + 'es';
+    else if (word.endsWith('y'))
+        return word.substring(0, word.length - 1) + 'ies';
+    else
+        return word + 's';
+}
 
 
 
@@ -780,12 +760,10 @@ XRepository.JSRepository.prototype._convert = function(objects, type) {
 
 
 XRepository.JSRepository.prototype._fetch = function(cursor) {
-    jQuery.each(cursor.cursorData.criteria, function(index, criterion) {
-        criterion._fixOperation();
-    });
+    cursor.cursorData.criteria = this._fixCriteria(cursor.cursorData.criteria);
+    cursor.cursorData.columns = this._getMatchingColumns(cursor.type);
 
     var repo = this;
-
     var origSort = cursor.cursorData.sort;
     if (cursor.cursorData.sort) {
         cursor.cursorData.sort = {};
@@ -809,6 +787,7 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
     return this._handleResponse(request, function() {
         repo._validateResponse(request, 'toArray');
         var objs = JSON.parse(request.responseText);
+        repo._fixPropertyNames(objs);
         repo._fixDateStrings(objs);
         repo._convert(objs, cursor.type);
         repo._applyJoinObjects(objs, cursor);
@@ -892,34 +871,115 @@ XRepository.JSRepository.prototype._fixDateStrings = function(objects) {
     if (!Array.is(objects))
         objects = [objects];
 
+    var self = this;
     jQuery.each(objects, function(index, obj) {
         jQuery.each(obj, function(property, value) {
-            if (!String.is(value))
-                return;
-
-            if (value.length == 20 && value.substring(10, 11) == 'T' && value.substring(19, 20) == 'Z') {
-                // Look for ISO 8601 dates: 2013-10-28T16:38:30Z
-                var m = moment.utc(value);
-                if (m.isValid())
-                    obj[property] = new Date(m.year(), m.month(), m.date(),
-                        m.hour(), m.minute(), m.second(), m.millisecond());
-
-            } else if (value.substring(0, 6) == '/Date(' &&
-                value.substring(value.length - 1) == '/' && !isNaN(value.substring(6, value.length - 7))) {
-                // Look for funky Microsoft JSON dates (stupid Microsoft): /Date(120750192350912803948012735091237401239)/
-                var time = parseInt(value.substring(6));
-                obj[property] = new Date(time);
-            } // end if-else
+            if (String.is(value)) {
+                var date = self.convertStringToDate(value);
+                if (date)
+                    obj[property] = date;
+            } // end if
         });
     });
 } // end function
 
 
 
+XRepository.JSRepository.prototype._fixPropertyNames = function(objects) {
+    // Extract the name from the reader's schema.  Fields with
+    // the same name in multiple tables selected (usually the
+    // primary key) will be preceded by the table name and a ".".
+    // For instance, if Employee extends from Person, the names
+    // "Person.Id" and "Employee.Id" will be column names.
+    // Strip the preceding table name and ".".
+    jQuery.each(objects, function(index, obj) {
+        jQuery.each(obj, function(property) {
+            var index = property.lastIndexOf('.');
+            if (index == -1)
+                return;
+
+            var newProperty = property.substring(index + 1);
+            obj[newProperty] = obj[property];
+            delete obj[property];
+        });
+    });
+} // end function
+
+
+
+XRepository.JSRepository.prototype._fixCriteria = function(criteria) {
+    if (!criteria)
+        return null;
+
+    var newCriteria = [];
+    var repo = this;
+    jQuery.each(criteria, function(index, criterion) {
+        criterion = new XRepository.Criterion(criterion.Name,
+            criterion.Operation, criterion.Value);
+        if (!criterion.Operation)
+            criterion.Operation = '=';
+
+        criterion.Operation = criterion.Operation.trim().toUpperCase();
+        switch (criterion.Operation) {
+            case '=':
+            case '==':
+            case 'EQUALTO':
+                criterion.Operation = 'EqualTo';
+                break;
+            case '>':
+            case 'GREATERTHAN':
+                criterion.Operation = 'GreaterThan';
+                break;
+            case '>=':
+            case 'GREATERTHANOREQUALTO':
+                criterion.Operation = 'GreaterThanOrEqualTo';
+                break;
+            case '<':
+            case 'LESSTHAN':
+                criterion.Operation = 'LessThan';
+                break;
+            case '<=':
+            case 'LESSTHANOREQUALTO':
+                criterion.Operation = 'LessThanOrEqualTo';
+                break;
+            case '<>':
+            case '!=':
+            case 'NOTEQUALTO':
+                criterion.Operation = 'NotEqualTo';
+                break;
+            case 'LIKE':
+                criterion.Operation = 'Like';
+                break;
+            case 'NOT LIKE':
+                this.Operation = 'NotLike';
+                break;
+            default:
+                throw new Error('OperationType string "' + str + '" is invalid.  ' +
+                    'Acceptable values are: =, >, >=, <, <=, !=, LIKE, NOT LIKE (== and <> are also accepted).');
+        } // end switch
+
+        if (repo.isUsingLikeForEquals) {
+            if (criterion.Operation == 'EqualTo')
+                criterion.Operation = 'Like';
+            if (criterion.Operation == 'NotEqualTo')
+                criterion.Operation = 'NotLike';
+        } // end if
+
+        newCriteria.push(criterion);
+    });
+    return newCriteria;
+} // end function
+
+
+
 XRepository.JSRepository.prototype._getCachedValue = function(cache, tableName, lookupPath) {
     var tableName = tableName.toUpperCase();
-    if (cache[tableName])
-        return cache[tableName];
+    var cachedValue = cache[tableName];
+    if (cachedValue)
+        if (Error.is(cachedValue))
+            throw cachedValue;
+        else
+            return cache[tableName];
 
     lookupPath = this.path.root + '/' + lookupPath;
     var request = jQuery.ajax(lookupPath, {
@@ -928,8 +988,13 @@ XRepository.JSRepository.prototype._getCachedValue = function(cache, tableName, 
         method: 'POST',
         data: { tableName: tableName }
     });
-    this._validateResponse(request);
-    cache[tableName] = JSON.parse(request.responseText);
+    try {
+        this._validateResponse(request);
+        cache[tableName] = JSON.parse(request.responseText);
+    } catch (e) {
+        cache[tableName] = e;
+        throw e;
+    } // end try catch
     return cache[tableName];
 } // end function
 
@@ -1021,9 +1086,16 @@ XRepository.JSRepository.prototype._getTableNames = function(type, isSilent) {
 
     var tableNames = [];
     while (type != Object) {
-        var tableDef = this._getTableDefinition(type.getName());
-        if (tableDef != null)
+        try {
+            var tableDef = this._getTableDefinition(type.getName());
             tableNames.push(tableDef.FullName);
+        } catch (e) {
+            // _getTableDefinition throws errors when the table
+            // indicated by type.getName() does not exist.  In those cases,
+            // catch the exception and move on.  _getTableNames will
+            // throw an exception if no tables are found.
+        } // end try-catch
+
         if (typeof type.getBase == 'function')
             type = type.getBase();
         else
@@ -1050,6 +1122,21 @@ XRepository.JSRepository.prototype._handleResponse = function(request, handle) {
         });
         return deferred.promise();
     } // end if-else
+} // end function
+
+
+
+XRepository.JSRepository.prototype._isValidColumn = function(type, columnName) {
+    var isValid = false;
+    var self = this;
+    jQuery.each(self._getTableNames(type), function(index, tableName) {
+        jQuery.each(self._getColumns(tableName), function(index, column) {
+            isValid = column.is(columnName);
+            return !isValid;
+        });
+        return !isValid;
+    });
+    return isValid;
 } // end function
 
 
@@ -1093,8 +1180,10 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
 } // end function
 
 
-
 XRepository.JSRepository.prototype._validateCriteria = function(type, criteria, methodName) {
+    if (typeof criteria == 'undefined' || criteria == null)
+        return null;
+
     // If criteria is a function, go ahead and call it (the caller must be
     // trying to do something clever).  But if its still a function after that,
     // just set criteria to null because functions just won't cut it as criteria.
@@ -1174,7 +1263,7 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest, met
     if (ajaxRequest.status == 500) {
         var error;
         try {
-            errorObj = JSON.parse(ajaxRequest.responseText);
+            var errorObj = JSON.parse(ajaxRequest.responseText);
             if (errorObj.message || errorObj.stack) {
                 var message = errorObj.message || '';
                 var stack = errorObj.stack || '';
@@ -1183,12 +1272,11 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest, met
                 error = [message, stack].join('\n\n');
             } // end if
         } catch (e) {
-            // Looks like JSON.parse failed.  Do nothing here because error
-            // is undefined it will be picked up after this try-catch.
+            // Looks like JSON.parse failed.
+            error = 'Error in JSRepository.'+ methodName +
+                ': unable to parse server error response.  Response data...\n' +
+                ajaxRequest.responseText;
         } // end try-catch
-        error = error || 'Error in JSRepository.'+ methodName +
-            ': unable to parse server error response.  Response data...\n' +
-            ajaxRequest.responseText;
         throw new Error(error);
     } // end if
 } // end function

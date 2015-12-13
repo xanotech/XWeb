@@ -127,7 +127,7 @@ hashNavigator.monitorHash = function() {
         return;
 
     hashNavigator.monitorHash.lastHash = hash;
-    $window.trigger('hashchange');
+    jQuery(window).trigger('hashchange');
 } // end function
 
 
