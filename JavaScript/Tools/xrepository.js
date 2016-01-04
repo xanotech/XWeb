@@ -313,6 +313,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     this._internal.columnMapCache = {};
     this._internal.columnsCache = {};
     this._internal.primaryKeysCache = {};
+    this._internal.propertyMapCache = {};
     this._internal.tableDefinitionCache = {};
     this._internal.tableNameCache = {};
     this.isSynchronized = isSynchronized;
@@ -399,6 +400,11 @@ XRepository.JSRepository.prototype.create = function(type) {
     this._validateTypeArgument('type', type, 'create');
     var tableNames = this._getTableNames(type);
     var obj = new type();
+
+    var propertyMap = this._getPropertyMap(type);
+    if (jQuery(propertyMap).is(function() { return true; }))
+        return obj;
+
     obj._tableNames = tableNames;
     var repo = this;
     jQuery.each(tableNames, function(index, tableName) {
@@ -655,6 +661,7 @@ XRepository.JSRepository.prototype._applyIds = function(objects, ids) {
             return true;
 
         jQuery.each(idObj, function(property, value) {
+            var property = repo._getMappedProperty(obj.constructor, property);
             obj[property] = value;
         });
     });
@@ -662,29 +669,29 @@ XRepository.JSRepository.prototype._applyIds = function(objects, ids) {
 
 
 
-XRepository.JSRepository.prototype._applyJoinObjects = function(objects, cursor) {
-    if (!cursor._joinObjects)
+XRepository.JSRepository.prototype._applyJoinObjects = function(objects, joinObjects) {
+    if (!joinObjects)
         return;
 
     var repo = this;
     jQuery.each(objects, function(index, obj) {
         jQuery.each(obj.constructor._references || [], function(index, reference) {
             if (reference.isMultiple)
-                repo._applyMultipleReference(obj, cursor, reference);
+                repo._applyMultipleReference(obj, joinObjects, reference);
             else
-                repo._applySingleReference(obj, cursor, reference);
+                repo._applySingleReference(obj, joinObjects, reference);
         });
     });
 } // end function
 
 
 
-XRepository.JSRepository.prototype._applyMultipleReference = function(sourceObj, cursor, reference) {
+XRepository.JSRepository.prototype._applyMultipleReference = function(sourceObj, joinObjects, reference) {
     var targetName = reference.target.getName();
     if (!targetName)
         return;
 
-    var targetJoinObjs = cursor._joinObjects[targetName];
+    var targetJoinObjs = joinObjects[targetName];
     if (!targetJoinObjs)
         return;
             
@@ -709,12 +716,12 @@ XRepository.JSRepository.prototype._applyMultipleReference = function(sourceObj,
 
 
 
-XRepository.JSRepository.prototype._applySingleReference = function(sourceObj, cursor, reference) {
+XRepository.JSRepository.prototype._applySingleReference = function(sourceObj, joinObjects, reference) {
     var targetName = reference.target.getName();
     if (!targetName)
         return;
 
-    var targetJoinObjs = cursor._joinObjects[targetName];
+    var targetJoinObjs = joinObjects[targetName];
     if (!targetJoinObjs)
         return;
             
@@ -747,10 +754,11 @@ XRepository.JSRepository.prototype._applyTableNames = function(objects) {
 
 XRepository.JSRepository.prototype._convert = function(objects, type) {
     var repo = this;
+    
     jQuery.each(objects, function(index, object) {
         var newObject = new type();
-        jQuery.each(object, function(property, value) {
-            var mappedProperty = repo._getMappedProperty(type, property);
+        jQuery.each(object, function(column, value) {
+            var mappedProperty = repo._getMappedProperty(type, column);
             newObject[mappedProperty] = value;
         });
         objects[index] = newObject;
@@ -761,38 +769,46 @@ XRepository.JSRepository.prototype._convert = function(objects, type) {
 
 XRepository.JSRepository.prototype._fetch = function(cursor) {
     cursor.cursorData.criteria = this._fixCriteria(cursor.cursorData.criteria);
-    cursor.cursorData.columns = this._getMatchingColumns(cursor.type);
 
-    var repo = this;
-    var origSort = cursor.cursorData.sort;
-    if (cursor.cursorData.sort) {
-        cursor.cursorData.sort = {};
-        jQuery.each(origSort, function(property, value) {
-            cursor.cursorData.sort[repo._getMappedColumn(cursor.type, property)] = value;
-        });
-    } // end if
-    var cursorDataJson = JSON.stringify(cursor.cursorData);
-    cursor.cursorData.sort = origSort;
-
+    var tableNames = this._getTableNames(cursor.type);
+    var cursorData = this._initCursorData(cursor);
     var request = jQuery.ajax(this.path.root + '/' + this.path.fetch, {
         async: !this.isSynchronized,
         cache: false,
         method: 'POST',
         data: {
-            tableNames: JSON.stringify(this._getTableNames(cursor.type)),
-            cursor: cursorDataJson
+            tableNames: JSON.stringify(tableNames),
+            cursor: JSON.stringify(cursorData)
         }
     });
 
+    var repo = this;
     return this._handleResponse(request, function() {
         repo._validateResponse(request, 'toArray');
-        var objs = JSON.parse(request.responseText);
-        repo._fixPropertyNames(objs);
-        repo._fixDateStrings(objs);
-        repo._convert(objs, cursor.type);
-        repo._applyJoinObjects(objs, cursor);
-        return objs;
+        var objects = JSON.parse(request.responseText);
+        repo._fixPropertyNames(objects);
+        repo._fixDateStrings(objects);
+        repo._convert(objects, cursor.type);
+
+        var joinObjects = repo._fetchStringJoins(objects, cursor);
+        if (joinObjects && joinObjects.promises) {
+            var deferred = jQuery.Deferred();
+            jQuery.when.apply(jQuery, joinObjects.promises).done(function() {
+                repo._applyJoinObjects(objects, joinObjects, cursor);
+                deferred.resolve();
+            });
+            objects.promise = deferred.promise();
+        } else
+            repo._applyJoinObjects(objects, joinObjects, cursor);
+
+        return objects;
     });
+} // end function
+
+
+
+XRepository.JSRepository.prototype._fetchStringJoins = function(objects, cursor) {
+    return cursor._joinObjects;
 } // end function
 
 
@@ -810,8 +826,6 @@ XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
     var repo = this;
     jQuery.each(columns, function(index, column) {
         var propertyName = repo._getMappedProperty(type, column);
-        //if ((propertyName == column && column.is(columnName)) ||
-        //    (propertyName != column && propertyName == columnName)) {
         if (propertyName.is(columnName)) {
             result = propertyName;
             return false;
@@ -1038,6 +1052,12 @@ XRepository.JSRepository.prototype._getMappedColumn = function(type, propertyNam
 
 XRepository.JSRepository.prototype._getMappedProperty = function(type, columnName) {
     var column = columnName.toUpperCase();
+    
+    // Get propertyMap now since I'm going to jack with type
+    var propertyMap = this._getPropertyMap(type);
+    
+    // Scan through references looking for a mapping
+    // for this column and return immediately if found.
     while (type != Object) {
         var cache = this._internal.columnMapCache[type.getName()]
         if (cache) {
@@ -1047,7 +1067,11 @@ XRepository.JSRepository.prototype._getMappedProperty = function(type, columnNam
         } // end if
         type = type.getBase();
     } // end while
-    return columnName;
+
+    // At this point, the columnName was not explicitly mapped so see if it's
+    // contained in propertyMap.  If not, just return the original columnName.
+    var property = propertyMap[column];
+    return property || columnName;
 } // end function
 
 
@@ -1069,6 +1093,23 @@ XRepository.JSRepository.prototype._getPrimaryKeys = function(typeOrTable) {
         });
         return keys;
     } // end if
+} // end function
+
+
+
+XRepository.JSRepository.prototype._getPropertyMap = function(type) {
+    var typeName = type.getName();
+    if (this._internal.propertyMapCache[typeName])
+        return this._internal.propertyMapCache[typeName];
+
+    var obj = new type();
+    var propertyMap = {};
+    jQuery.each(obj, function(property) {
+        if (!Function.is(obj[property]))
+            propertyMap[property.toUpperCase()] = property;
+    });
+
+    return this._internal.propertyMapCache[typeName] = propertyMap;
 } // end function
 
 
@@ -1105,9 +1146,7 @@ XRepository.JSRepository.prototype._getTableNames = function(type, isSilent) {
         throw new Error('There are no tables associated with "' + typeName + '".')
 
     tableNames.reverse();
-    this._internal.tableNameCache[typeName] = tableNames;
-
-    return this._internal.tableNameCache[typeName];
+    return this._internal.tableNameCache[typeName] = tableNames;
 } // end function
 
 
@@ -1118,10 +1157,58 @@ XRepository.JSRepository.prototype._handleResponse = function(request, handle) {
     else {
         var deferred = jQuery.Deferred();
         request.done(function() {
-            deferred.resolve(handle());
+            var result = handle();
+            if (result.promise && XRepository.isPromise(result.promise))
+                result.promise.done(function() {
+                    deferred.resolve(result);
+                });
+            else
+                deferred.resolve(result);
         });
         return deferred.promise();
     } // end if-else
+} // end function
+
+
+
+XRepository.JSRepository.prototype._initCursorData = function(cursor) {
+    var repo = this;
+
+    // Clone cursor data (so the original remains untouched)
+    var cursorData = JSON.parse(JSON.stringify(cursor.cursorData));
+    
+    // This next block of code populates columns based on the properties
+    // of the cursor's type and their mapped column name (assuming cursor.type
+    // is a Function / "class" and when constructed it contains properties).
+    var propertyMap = this._getPropertyMap(cursor.type);
+    if (jQuery(propertyMap).is(function() { return true; })) {
+        var columns = [];
+        var tableNames = this._getTableNames(cursor.type);
+        var allColumns = {}; // Map of column names keyed by their upper-case value
+        jQuery.each(tableNames, function(index, tableName) {
+            jQuery.each(repo._getColumns(tableName), function(index, column) {
+                allColumns[column.toUpperCase()] = column;
+            });
+        });
+
+        jQuery.each(propertyMap, function(propertyUpperCase, property) {
+            var column = repo._getMappedColumn(cursor.type, property);
+            column = allColumns[column.toUpperCase()];
+            if (column)
+                columns.push(column);
+        });
+        cursorData.columns = columns;
+    } // end if
+
+    // Change sort columns to mapped database columns
+    var sort = {};
+    if (cursorData.sort)
+        jQuery.each(cursorData.sort, function(property, value) {
+            sort[repo._getMappedColumn(cursor.type, property)] = value;
+        });
+    cursorData.sort = sort;
+
+    return cursorData;
 } // end function
 
 
