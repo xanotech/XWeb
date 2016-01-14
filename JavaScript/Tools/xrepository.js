@@ -808,7 +808,11 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
 
 
 XRepository.JSRepository.prototype._fetchStringJoins = function(objects, cursor) {
-    return cursor._joinObjects;
+    var joinObjects = {};
+    if (this.isSynchronized) {
+        
+    } else {
+    } // end if
 } // end function
 
 
