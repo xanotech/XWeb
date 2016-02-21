@@ -97,7 +97,7 @@ XRepository.Cursor.prototype.count = function(applySkipLimit) {
 
 
 XRepository.Cursor.prototype.forEach = function(callback) {
-    if (typeof callback != 'function')
+    if (!Function.is(callback))
         return;
 
     function performForEach(objects) {
@@ -125,26 +125,7 @@ XRepository.Cursor.prototype.hasNext = function() {
 
 XRepository.Cursor.prototype.join = function() {
     this.data = null;
-
-    // Initialize _joinObjects, which is used to hold all arguements
-    // in arrays grouped by class (constructor) name
-    this._joinObjects = this._joinObjects || {};
-    var cursor = this;
-    jQuery.each(arguments, function(index, arg) {
-        // Each argument should be an array.  If arg isn't an array,
-        // wrap it with an array so the rest of the logic can proceed.
-        if (!Array.is(arg))
-            arg = [arg];
-
-        jQuery.each(arg, function(index, obj) {
-            if (!obj || !obj.constructor)
-                return;
-            var name = obj.constructor.getName();
-            cursor._joinObjects[name] = cursor._joinObjects[name] || [];
-            cursor._joinObjects[name].push(obj);
-        });
-    });
-
+    this._joinObjects = XRepository._createJoinObjects(arguments, this._joinObjects);
     return this;
 } // end function
 
@@ -164,7 +145,7 @@ XRepository.Cursor.prototype.limit = function(rows) {
 
 
 XRepository.Cursor.prototype.map = function(callback) {
-    if (typeof callback != 'function')
+    if (Function.is(callback))
         return;
 
     function performMap(objects) {
@@ -295,7 +276,7 @@ XRepository.Cursor.prototype._validateSortObj = function(sortObj) {
         throw new Error('Error in JSRepository.sort: sortObj argument was not valid.  ' +
             'The sortObj argument must be a String, an array of Strings, ' +
             'or an object where properties are Booleans or Numbers\n' +
-            '(typeof sortObj = ' + typeof sortObj + ', sortObj = ' + JSON.stringify(sortObj) + ').');
+            XRepository._formatObjectForError(sortObj, 'sortObj') + '.');
     return sortObj;
 } // end function
 
@@ -367,7 +348,7 @@ XRepository.JSRepository.prototype.convertStringToDate = function(string) {
 
 XRepository.JSRepository.prototype.count = function(type, criteria) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type, 'count');
+    this._validateTypeArgument(type, 'type', 'count');
     criteria = this._validateCriteria(type, criteria, 'count');
     var cursor = new XRepository.Cursor(type, criteria, this)
 
@@ -397,7 +378,7 @@ XRepository.JSRepository.prototype.count = function(type, criteria) {
 // defined by the server will be present (although initialized to null).
 XRepository.JSRepository.prototype.create = function(type) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type, 'create');
+    this._validateTypeArgument(type, 'type', 'create');
     var tableNames = this._getTableNames(type);
     var obj = new type();
 
@@ -421,7 +402,7 @@ XRepository.JSRepository.prototype.create = function(type) {
 
 XRepository.JSRepository.prototype.find = function(type, criteria) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type, 'find');
+    this._validateTypeArgument(type, 'type', 'find');
     criteria = this._validateCriteria(type, criteria, 'find');
     return new XRepository.Cursor(type, criteria, this);
 } // end function
@@ -445,7 +426,7 @@ XRepository.JSRepository.prototype.findOne = function(type, criteria) {
 
 XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, columnName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type, 'mapColumn');
+    this._validateTypeArgument(type, 'type', 'mapColumn');
     if (!String.is(propertyName))
         throw new Error('Error in JSRepository.mapColumn: propertyName argument is missing or is not a String.');
     if (!String.is(columnName))
@@ -464,87 +445,41 @@ XRepository.JSRepository.prototype.mapColumn = function(type, propertyName, colu
 
 XRepository.JSRepository.prototype.mapMultipleReference = function(source, target, foreignKey, propertyName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('source', source, 'mapMultipleReference');
-    this._validateTypeArgument('target', target, 'mapMultipleReference');
-
-    if (!propertyName) {
-        propertyName = this.pluralize(target.getName());
-        propertyName = propertyName.charAt(0).toLowerCase() + propertyName.substring(1);
-    } // end if
+    this._validateTypeArgument(source, 'source', 'mapMultipleReference');
+    this._validateTypeArgument(target, 'target', 'mapMultipleReference');
 
     var ref = new XRepository.Reference(this, source, target);
     ref.foreignKey = foreignKey;
-    ref.propertyName = propertyName;
     ref.isMultiple = true;
 
-    var repo = this;
-    if (Object.defineProperty)
-        Object.defineProperty(source.prototype, propertyName, {
-            get: function() {
-                var objects = this['_' + propertyName];
-                if (objects)
-                    return objects;
-
-                var criteria = {};
-                criteria[ref.getForeignKey()] = this[repo._getIdColumn(source)];
-                objects = repo.sync.find(target, criteria).join(this).toArray();
-                this['_' + propertyName] = objects;
-                return objects;
-            },
-            set: function(objects) {
-                this['_' + propertyName] = objects;
-            }
-        });
+    this._defineReferenceProperty(ref, propertyName);
 } // end function
 
 
 
 XRepository.JSRepository.prototype.mapSingleReference = function(source, target, foreignKey, propertyName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('source', source, 'mapSingleReference');
-    this._validateTypeArgument('target', target, 'mapSingleReference');
-
-    if (!propertyName) {
-        propertyName = target.getName();
-        propertyName = propertyName.charAt(0).toLowerCase() + propertyName.substring(1);
-    } // end if
+    this._validateTypeArgument(source, 'source', 'mapSingleReference');
+    this._validateTypeArgument(target, 'target', 'mapSingleReference');
 
     var ref = new XRepository.Reference(this, source, target);
     ref.foreignKey = foreignKey;
-    ref.propertyName = propertyName;
 
-    var repo = this;
-    if (Object.defineProperty)
-        Object.defineProperty(source.prototype, propertyName, {
-            get: function() {
-                var objects = this['_' + propertyName];
-                if (objects)
-                    return objects[0] || null;
-
-                var criteria = {};
-                criteria[repo._getIdColumn(target)] = this[ref.getForeignKey()];
-                var objects = repo.sync.find(target, criteria).toArray();
-                this['_' + propertyName] = objects;
-                return objects[0] || null;
-            },
-            set: function(object) {
-                this['_' + propertyName] = [object];
-            }
-        });
+    this._defineReferenceProperty(ref, propertyName);
 } // end function
 
 
 
 XRepository.JSRepository.prototype.mapTable = function(type, tableName) {
     XRepository._validateRequiredLibraries();
-    this._validateTypeArgument('type', type, 'mapTable');
+    this._validateTypeArgument(type, 'type', 'mapTable');
     if (!String.is(tableName))
         throw new Error('Error in JSRepository.mapTable: tableName argument is missing or is not a String.');
 
     this._getTableDefinition(tableName); // Validates passed tableName
 
     var tableNames = [];
-    var baseType = type.getBase();
+    var baseType = XRepository._getBase(type);
     if (baseType != Object)
         tableNames = tableNames.concat(this._getTableNames(baseType, true));
     tableNames.push(tableName);
@@ -571,7 +506,7 @@ XRepository.JSRepository.prototype.remove = function(objects) {
     if (Object.isBasic(objects))
         throw new Error('Error in JSRepository.remove: objects argument cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
-            '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').');
+            XRepository._formatObjectForError(objects, 'objects') + '.');
     if (!objects)
         return;
 
@@ -613,7 +548,7 @@ XRepository.JSRepository.prototype.save = function(objects) {
     if (Object.isBasic(objects))
         throw new Error('Error in JSRepository.save: objects argument cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
-            '(typeof objects = ' + typeof objects + ', objects = ' + JSON.stringify(objects) + ').');
+            XRepository._formatObjectForError(objects, 'objects') + '.');
     if (!objects)
         return;
 
@@ -673,9 +608,17 @@ XRepository.JSRepository.prototype._applyJoinObjects = function(objects, joinObj
     if (!joinObjects)
         return;
 
+    if (Array.is(joinObjects)) {
+        var array = joinObjects;
+        if (!array.length)
+            return;
+        var joinObjects = {};
+        joinObjects[array[0].constructor.getName()] = array;
+    } // end if
+
     var repo = this;
     jQuery.each(objects, function(index, obj) {
-        jQuery.each(obj.constructor._references || [], function(index, reference) {
+        jQuery.each(repo._getReferences(obj.constructor), function(index, reference) {
             if (reference.isMultiple)
                 repo._applyMultipleReference(obj, joinObjects, reference);
             else
@@ -695,7 +638,7 @@ XRepository.JSRepository.prototype._applyMultipleReference = function(sourceObj,
     if (!targetJoinObjs)
         return;
             
-    var primaryKey = this._getIdColumn(sourceObj.constructor);
+    var primaryKey = this._getIdProperty(sourceObj.constructor);
     if (!primaryKey)
         return;
 
@@ -703,15 +646,12 @@ XRepository.JSRepository.prototype._applyMultipleReference = function(sourceObj,
     if (!primaryKeyValue)
         return;
 
-    var objs;
+    var objs = [];
     jQuery.each(targetJoinObjs, function(index, targetJoinObj) {
-        if (targetJoinObj[reference.getForeignKey()] == primaryKeyValue) {
-            objs = objs || [];
+        if (targetJoinObj[reference.getForeignKey()] == primaryKeyValue)
             objs.push(targetJoinObj);
-        } // end if
     });
-    if (objs)
-        sourceObj[reference.propertyName] = objs;
+    sourceObj[reference.propertyName] = objs;
 } // end function
 
 
@@ -729,14 +669,15 @@ XRepository.JSRepository.prototype._applySingleReference = function(sourceObj, j
     if (!foreignKeyValue)
         return;
 
-    var primaryKey = this._getIdColumn(reference.target);
+    var primaryKey = this._getIdProperty(reference.target);
     if (!primaryKey)
         return;
 
+    sourceObj[reference.propertyName] = null;
     jQuery.each(targetJoinObjs, function(index, targetJoinObj) {
         if (targetJoinObj[primaryKey] == foreignKeyValue) {
             sourceObj[reference.propertyName] = targetJoinObj;
-            return;
+            return false;
         } // end if
     });
 } // end function
@@ -763,6 +704,47 @@ XRepository.JSRepository.prototype._convert = function(objects, type) {
         });
         objects[index] = newObject;
     });
+} // end function
+
+
+
+XRepository.JSRepository.prototype._defineReferenceProperty = function(reference, propertyName) {
+    if (!propertyName) {
+        propertyName = reference.target.getName();
+        if (reference.isMultiple)
+            propertyName = this.pluralize(propertyName);
+        propertyName = propertyName.charAt(0).toLowerCase() + propertyName.substring(1);
+        reference.propertyName = propertyName
+    } // end if
+
+    var repo = this;
+    if (Object.defineProperty)
+        Object.defineProperty(reference.source.prototype, propertyName, {
+            get: function() {
+                var value = this['_' + propertyName];
+                if (value)
+                    return value;
+
+                var criteria = {};
+                if (reference.isMultiple)
+                    criteria[reference.getForeignKey()] = this[repo._getIdProperty(reference.source)];
+                else
+                    criteria[repo._getIdProperty(reference.target)] = this[reference.getForeignKey()];
+                var cursor = repo.sync.find(reference.target, criteria);
+                if (reference.isMultiple)
+                    cursor.join(this);
+                value = cursor.toArray();
+                
+                if (!reference.isMultiple)
+                    value = value[0] || null;
+                this['_' + propertyName] = value;
+                
+                return value;
+            },
+            set: function(value) {
+                this['_' + propertyName] = value;
+            }
+        });
 } // end function
 
 
@@ -794,12 +776,12 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
         if (joinObjects && joinObjects.promises) {
             var deferred = jQuery.Deferred();
             jQuery.when.apply(jQuery, joinObjects.promises).done(function() {
-                repo._applyJoinObjects(objects, joinObjects, cursor);
+                repo._applyJoinObjects(objects, joinObjects);
                 deferred.resolve();
             });
             objects.promise = deferred.promise();
         } else
-            repo._applyJoinObjects(objects, joinObjects, cursor);
+            repo._applyJoinObjects(objects, joinObjects);
 
         return objects;
     });
@@ -808,16 +790,90 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
 
 
 XRepository.JSRepository.prototype._fetchStringJoins = function(objects, cursor) {
-    var joinObjects = {};
+    var joinObjects = {}; // A copy of cursor._joinObjects minus String + objects
+
+    // Copy all properties except 'String' to joinObjects
+    jQuery.each(cursor._joinObjects || {}, function(property, objects) {
+        if (property != 'String')
+            joinObjects[property] = objects;
+   });
+
+    var strings = this._normalizeStrings(cursor._joinObjects && cursor._joinObjects.String);
+    if (!strings || !strings.length)
+        return joinObjects;
+
+    var repo = this;
     if (this.isSynchronized) {
-        
+        jQuery.each(strings, function(index, string) {
+            var sourceObjects = objects;
+
+            // Loops through all individual property names defined in "string"
+            // except the last one (which is the one we're fetching for).
+            // For each propertyName, sourceObjects is set to all the objects
+            // of sourceObjects returned by that property name.
+            var split = string.split('.');
+            var joinPropertyName = split.splice(split.length - 1)[0];
+            jQuery.each(split, function(index, propertyName) {
+                if (!sourceObjects || !sourceObjects.length)
+                    return false;
+
+                var newSourceObjects = [];
+                // Get all objects for propertyName
+                jQuery.each(sourceObjects, function(index, object) {
+                    var propertyValue = object[propertyName];
+                    if (Array.is(propertyValue))
+                        newSourceObjects.pushArray(propertyValue);
+                    else if (propertyValue)
+                        newSourceObjects.push(propertyValue);
+                });
+                sourceObjects = newSourceObjects;
+            });
+
+            if (!sourceObjects || !sourceObjects.length)
+                return false;
+
+            var type = sourceObjects[0].constructor;
+            var reference = repo._getReference(type, joinPropertyName);
+            if (!reference)
+                throw new Error('Error in join parameter "' + string + '".  ' +
+                    type.getName() + ' does not have a reference named "' +
+                    joinPropertyName + '".');
+
+            var criterion = new XRepository.Criterion();
+            criterion.Operation = '=';
+            if (reference.isMultiple) {
+                criterion.Name = reference.getForeignKey();
+                criterion.Value = [];
+                jQuery.each(sourceObjects, function(index, obj) {
+                    criterion.Value.push(obj[repo._getIdProperty(type)]);
+                });
+            } else {
+                criterion.Name = repo._getIdProperty(reference.target);
+                criterion.Value = [];
+                jQuery.each(sourceObjects, function(index, obj) {
+                    var value = obj[reference.getForeignKey()];
+                    if (value != null)
+                        criterion.Value.push(value);
+                });
+            } // end if-else
+
+            var joinObjs = repo.find(reference.target, criterion).join(sourceObjects).toArray();
+            var joinObjs = XRepository._createJoinObjects(joinObjs);
+            // If there isn't an element for the reference target, that means there were
+            // no results from the find.  Create an empty element so the property will
+            // be populated and not re-fetched when accessed.
+            joinObjs[reference.target.getName()] = joinObjs[reference.target.getName()] || [];
+            repo._applyJoinObjects(sourceObjects, joinObjs);
+        });
     } else {
     } // end if
+
+    return joinObjects;
 } // end function
 
 
 
-XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
+XRepository.JSRepository.prototype._findProperty = function(type, columnName) {
     if (!columnName)
         return null;
 
@@ -840,29 +896,29 @@ XRepository.JSRepository.prototype._findColumn = function(type, columnName) {
 
 
 
-XRepository.JSRepository.prototype._findForeignKeyColumn = function(referencedType, referencingType) {
-    var idColumn = this._getIdColumn(referencedType);
-    var vanillaIdColumn = idColumn;
+XRepository.JSRepository.prototype._findForeignKeyProperty = function(referencedType, referencingType) {
+    var idProperty = this._getIdProperty(referencedType);
+    var vanillaIdProperty = idProperty;
 
-    // If the idColumn without any table names is the same as vanilla idColumn,
+    // If the idProperty without any table names is the same as vanilla idProperty,
     // then they key name is "simple" (like "Id" or "Code").  If that's the case
-    // then only check for referencingType columns if the simple idColumn does
-    // not match the idColumn of the referencingType.
+    // then only check for referencingType columns if the simple idProperty does
+    // not match the idProperty of the referencingType.
     var tableNames = this._getTableNames(referencedType);
     var repo = this;
     jQuery.each(tableNames, function(index, tableName) {
         var tableDef = repo._getTableDefinition(tableName);
         tableName = tableDef.TableName;
-        idColumn = idColumn.removeIgnoreCase(tableName);
+        idProperty = idProperty.removeIgnoreCase(tableName);
     });
-    if (idColumn != vanillaIdColumn ||
-        idColumn != this._getIdColumn(referencingType)) {
-        var column = this._findColumn(referencingType, vanillaIdColumn);
+    if (idProperty != vanillaIdProperty ||
+        idProperty != this._getIdProperty(referencingType)) {
+        var column = this._findProperty(referencingType, vanillaIdProperty);
         if (column)
             return column;
     } // end if
 
-    return this._findColumn(referencingType, referencedType.getName() + idColumn);
+    return this._findProperty(referencingType, referencedType.getName() + idProperty);
 } // end function
 
 
@@ -1024,7 +1080,7 @@ XRepository.JSRepository.prototype._getColumns = function(tableName) {
 
 
 
-XRepository.JSRepository.prototype._getIdColumn = function(type) {
+XRepository.JSRepository.prototype._getIdProperty = function(type) {
     var keys = this._getPrimaryKeys(type);
     if (keys.length != 1)
         return null;
@@ -1047,7 +1103,7 @@ XRepository.JSRepository.prototype._getMappedColumn = function(type, propertyNam
             if (mappedColumn)
                 return mappedColumn;
         }
-        type = type.getBase();
+        type = XRepository._getBase(type);
     } // end while
     return propertyName;
 } // end function
@@ -1069,7 +1125,7 @@ XRepository.JSRepository.prototype._getMappedProperty = function(type, columnNam
             if (propertyName)
                 return propertyName;
         } // end if
-        type = type.getBase();
+        type = XRepository._getBase(type);
     } // end while
 
     // At this point, the columnName was not explicitly mapped so see if it's
@@ -1118,6 +1174,31 @@ XRepository.JSRepository.prototype._getPropertyMap = function(type) {
 
 
 
+XRepository.JSRepository.prototype._getReference = function(type, propertyName) {
+    var result;
+    jQuery.each(this._getReferences(type), function(index, reference) {
+        if (reference.propertyName == propertyName) {
+            result = reference;
+            return false;
+        } // end if
+    });
+    return result;
+} // end function
+
+
+
+XRepository.JSRepository.prototype._getReferences = function(type) {
+    var references = [];
+    while (Function.is(type) && type != Object) {
+        if (type._references)
+            references.pushArray(type._references);
+        type = XRepository._getBase(type);
+    } // end while
+    return references;
+} // end function
+
+
+
 XRepository.JSRepository.prototype._getTableDefinition = function(tableName) {
     return this._getCachedValue(this._internal.tableDefinitionCache, tableName, this.path.getTableDefinition);
 } // end function
@@ -1141,10 +1222,7 @@ XRepository.JSRepository.prototype._getTableNames = function(type, isSilent) {
             // throw an exception if no tables are found.
         } // end try-catch
 
-        if (typeof type.getBase == 'function')
-            type = type.getBase();
-        else
-            type = Object;
+        type = XRepository._getBase(type);
     } // end while
     if (!tableNames.length && !isSilent)
         throw new Error('There are no tables associated with "' + typeName + '".')
@@ -1232,6 +1310,34 @@ XRepository.JSRepository.prototype._isValidColumn = function(type, columnName) {
 
 
 
+XRepository.JSRepository.prototype._normalizeStrings = function(strings) {
+    var normalizedStrings = [];
+    if (!strings)
+        return strings;
+
+    jQuery.each(strings, function(index, string) {
+        if (!string)
+            return true;
+
+        var split = string.split('.');
+        var combinedString = '';
+        jQuery.each(split, function(index, propertyName) {
+            if (!propertyName)
+                return;
+
+            if (combinedString)
+                combinedString += '.'
+            combinedString += propertyName;
+            if (normalizedStrings.indexOf(combinedString) == -1)
+                normalizedStrings.push(combinedString);
+        });
+    });
+    normalizedStrings.sort();
+    return normalizedStrings;
+} // end function
+
+
+
 XRepository.JSRepository.prototype._removeExtraneousProperties = function(objects) {
     if (!Array.is(objects))
         objects = [objects];
@@ -1272,21 +1378,22 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
 
 
 XRepository.JSRepository.prototype._validateCriteria = function(type, criteria, methodName) {
-    if (typeof criteria == 'undefined' || criteria == null)
+    // Note: Can't use simple if (isThere) checking since criteria could possibly be false boolean.
+    if (criteria == undefined || criteria == null)
         return null;
 
     // If criteria is a function, go ahead and call it (the caller must be
     // trying to do something clever).  But if its still a function after that,
     // just set criteria to null because functions just won't cut it as criteria.
-    if (typeof criteria == 'function')
+    if (Function.is(criteria))
         criteria = criteria();
-    if (typeof criteria == 'function')
+    if (Function.is(criteria))
         criteria = null;
 
     var basicArray = XRepository.Criterion.getBasicArray(criteria);    
     if (Object.isBasic(criteria) || basicArray) {
-        var idColumn = this._getIdColumn(type);
-        if (!idColumn) {
+        var idProperty = this._getIdProperty(type);
+        if (!idProperty) {
             var valueStr = basicArray ? '[list-of-values]' : '' + criteria;
 
             if (String.is(criteria) || Date.is(criteria))
@@ -1297,7 +1404,7 @@ XRepository.JSRepository.prototype._validateCriteria = function(type, criteria, 
                 ') method cannot be used for ' + type.getName() +
                 ' because does not have a single column primary key.');
         } // end if
-        criteria = new XRepository.Criterion(idColumn, criteria);
+        criteria = new XRepository.Criterion(idProperty, criteria);
     } // end if
 
     criteria = criteria || [];
@@ -1338,13 +1445,11 @@ XRepository.JSRepository.prototype._validateEntityArray = function(objects, meth
             throw new Error('Error in JSRepository.' + methodName +
                 ': element ' + index + ' in objects' +
                 'array argument cannot be a basic type but must instead be an entity object\n' +
-                '(typeof objects[' + index + '] = ' + typeof obj +
-                ', objects[' + index + '] = ' + JSON.stringify(obj) + ').');
+                XRepository._formatObjectForError(obj, 'objects[' + index + ']') + '.');
         else if (!obj)
             throw new Error('Error in JSRepository.' + methodName +
                 ': element ' + index + ' in objects array argument is null or undefined\n' +
-                '(typeof objects[' + index + '] = ' + typeof obj +
-                ', objects[' + index + '] = ' + JSON.stringify(obj) + ').');
+                XRepository._formatObjectForError(obj, 'objects[' + index + ']') + '.');
     });
 } // end function
 
@@ -1374,12 +1479,11 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest, met
 
 
 
-XRepository.JSRepository.prototype._validateTypeArgument = function(argumentName, argument, methodName) {
-    if (typeof argument != 'function')
+XRepository.JSRepository.prototype._validateTypeArgument = function(argument, argumentName, methodName) {
+    if (!Function.is(argument))
         throw new Error('Error in JSRepository.' + methodName +
             ': ' + argumentName + ' argument was not initialized or was not a function\n' +
-            '(typeof ' + argumentName + ' = ' + typeof argument +
-            ', ' + argumentName + ' = ' + JSON.stringify(argument) + ').');
+            XRepository._formatObjectForError(argument, argumentName) + '.');
 } // end function
 
 
@@ -1400,8 +1504,8 @@ XRepository.Reference = function(repository, source, target) {
 
 XRepository.Reference.prototype.getForeignKey = function() {
     this.foreignKey = this.foreignKey || (this.isMultiple ?
-        this.repository._findForeignKeyColumn(this.source, this.target) :
-        this.repository._findForeignKeyColumn(this.target, this.source));
+        this.repository._findForeignKeyProperty(this.source, this.target) :
+        this.repository._findForeignKeyProperty(this.target, this.source));
     return this.foreignKey
 } // end function
 
@@ -1409,6 +1513,55 @@ XRepository.Reference.prototype.getForeignKey = function() {
 
 XRepository.isPromise = function(obj) {
     return obj && Function.is(obj.done) && Function.is(obj.promise);
+} // end function
+
+
+
+XRepository._formatObjectForError = function(object, objectName) {
+    return '(typeof ' + objectName + ' = ' + typeof object + ', ' +
+        objectName + ' = ' + JSON.stringify(object) + ')';
+} // end function
+
+
+
+XRepository._createJoinObjects = function(objects, joinObjects) {
+    // Instanciate joinObjects if it is undefined.
+    joinObjects = joinObjects || {};
+
+    jQuery.each(objects, function(index, array) {
+        // Each object should be an array.  If it isn't an array,
+        // wrap it with an array so the rest of the logic can proceed.
+        if (!Array.is(array))
+            array = [array];
+
+        jQuery.each(array, function(index, obj) {
+            if (!obj || !obj.constructor)
+                return;
+
+            // Add obj to joinObjects for all type names that obj is known by.
+            var type = obj.constructor;
+            while (type != Object) {
+                var name = type.getName();
+                joinObjects[name] = joinObjects[name] || [];
+                joinObjects[name].push(obj);
+                type = XRepository._getBase(type);
+            } // end while
+        });
+    });
+
+    return joinObjects;
+} // end function
+
+
+
+XRepository._getBase = function(type) {
+    if (!Function.is(type))
+        return null;
+    if (Function.is(type.getBase))
+        return type.getBase();
+    if (type == Object)
+        return null;
+    return Object;
 } // end function
 
 

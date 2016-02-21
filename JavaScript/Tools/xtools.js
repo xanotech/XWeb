@@ -109,10 +109,11 @@ Function.prototype.getName = function() {
 
 
 
-// Checks to see if the arguement is of the calling type.
+// Checks to see if the argument is of the calling type.
 // String.is('abc'); // returns true
-// Function.is(5); // returns true
-// Date.is('1/1/2000') // returns false since the arguement is a String
+// Number.is(5); // returns true
+// Function.is(String); // returns true since String is a "function"
+// Date.is('1/1/2000'); // returns false since the arguement is a String
 Function.prototype.is = function(obj) {
     return obj != undefined && obj != null &&
         (obj.constructor == this || obj instanceof this);
