@@ -13,19 +13,80 @@ function XApplication() {
 
 
 
-    application.alert = function(html, alertClass) {
-        if (typeof hashNavigator != 'undefined' &&
-            typeof jQuery().emulateTransitionEnd == 'function') {
-            var alertHtml = '<div class="alert alert-dismissable ' + (alertClass || 'alert-success') + '">' +
-                '<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>' +
-                html + '</div>';
-            jQuery('#' + hashNavigator.contentId).prepend(alertHtml);
-        } else {
+    application.alert = function(html, alertClass, fadeAfter) {
+        if (typeof hashNavigator == 'undefined') {
+            // Not using hashNavigator, just use regular alert.
             html = html.split('<br>').join('\n');
             html = html.split('<BR>').join('\n');
             html = html.replace(/(<([^>]+)>)/ig, '');
             alert(html);
-        } // end if-else
+        } if (typeof jQuery.fn.emulateTransitionEnd == 'function')
+            application.alert.bootstrap3(html, alertClass, fadeAfter);
+        else if (typeof jQuery.fn.popover == 'function')
+            application.alert.bootstrap2(html, alertClass, fadeAfter);
+        else
+            application.alert.custom(html, alertClass, fadeAfter);
+    } // end function
+
+
+
+    application.alert.bootstrap2 = function(html, alertClass, fadeAfter) {
+        if (['error', 'info', 'success'].indexOf(alertClass) > -1)
+            alertClass = 'alert-' + alertClass;
+        var glyphiconMap = {
+            'alert-error': 'minus-sign',
+            'alert-info': 'info-sign',
+            'alert-success': 'ok-sign'
+        };
+
+        var alertHtml = '<div class="alert';
+        if (alertClass)
+            alertHtml += ' ' + alertClass;
+        alertHtml += '"><button type="button" class="close" data-dismiss="alert">x</button>';
+        if (glyphiconMap[alertClass])
+            alertHtml += '<i class="icon-' + glyphiconMap[alertClass] + '"></i> ';
+        alertHtml += html + '</div>';
+        var $alert = jQuery(alertHtml).prependTo('#' + hashNavigator.contentId);
+        if (fadeAfter && fadeAfter.constructor == Number)
+            $alert.delay(fadeAfter).fadeOut(1000);
+    } // end function
+
+
+
+    application.alert.bootstrap3 = function(html, alertClass, fadeAfter) {
+        if (!alertClass)
+            alertClass = 'info';
+        if (['danger', 'info', 'success', 'warning'].indexOf(alertClass) > -1)
+            alertClass = 'alert-' + alertClass;
+        var glyphiconMap = {
+            'alert-danger': 'minus-sign',
+            'alert-info': 'info-sign',
+            'alert-success': 'ok-sign',
+            'alert-warning': 'exclamation-sign'
+        };
+
+        var alertHtml = '<div class="alert alert-dismissable ' + alertClass + '">' +
+            '<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>';
+        if (glyphiconMap[alertClass])
+            alertHtml += '<span class="glyphicon glyphicon-' + glyphiconMap[alertClass] + '"></span> ';
+        alertHtml += html + '</div>';
+        var $alert = jQuery(alertHtml).prependTo('#' + hashNavigator.contentId);
+        if (fadeAfter && fadeAfter.constructor == Number)
+            $alert.delay(fadeAfter).fadeOut(1000);
+    } // end function
+
+
+
+    application.alert.custom = function(html, alertClass, fadeAfter) {
+        alertClass = alertClass || 'alert';
+        var alertHtml = '<div class="' + alertClass + '">';
+        alertHtml += '<span style="float: right;">';
+        alertHtml += '<a href="#" onclick="$(this).parent().parent().remove(); return false;">X</a>'
+        alertHtml += '</span>';
+        alertHtml += html + '</div>';
+        var $alert = jQuery(alertHtml).prependTo('#' + hashNavigator.contentId);
+        if (fadeAfter && fadeAfter.constructor == Number)
+            $alert.delay(fadeAfter).fadeOut(1000);
     } // end function
 
 
@@ -88,8 +149,9 @@ function XApplication() {
         message = (message || '').split('\n').join('<br>');
         stack = (stack || '').split('\n').join('<br>');
         if (stack)
-            stack = 'Stack Trace...<br>' + stack;
-        application.alert([message, stack].join('<br><br>'), 'alert-error');
+            stack = '<a class="alert-link" href="#" onclick="jQuery(this).next().toggle(); return false;">' +
+                'Stack Trace</a><div style="display: none;">' + stack + '</div>';
+        application.alert([message, stack].join('<br><br>'), 'danger');
     } // end method
 
 
@@ -170,7 +232,7 @@ function XApplication() {
         } // end function
 
         // Check to see if jQuery.include is present.  If it is, call it passing
-        // callInit as a callback.  Otherwise, just call callINit.
+        // callInit as a callback.  Otherwise, just call callInit.
         var $content = jQuery('#' + hashNavigator.contentId);
         if (typeof $content.include == 'function')
             $content.include(callInit);

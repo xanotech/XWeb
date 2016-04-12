@@ -1,6 +1,6 @@
 // xtools JavaScript Library v1.3
 //
-// Copyright 2015 Xanotech LLC
+// Copyright 2016 Xanotech LLC
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
 
@@ -8,24 +8,43 @@
 
 
 
-Array.prototype.indexOf = Array.prototype.indexOf || function(searchElement, fromIndex) {
+// Extends the prototype of the type passed by safely adding a new
+// (non-enumerable) method with the name and function definition passed.
+Object.extend = function(type, name, func) {
+    if (!type || !type.prototype)
+        throw new Error('Error in Object.extend: type argument is not a Function');
+    if (!name || name.constructor != String)
+        throw new Error('Error in Object.extend: name argument is not a String');
+    if (!func || func.constructor != Function)
+        throw new Error('Error in Object.extend: func argument is not a Function');
+
+    if (type.prototype[name])
+        return;
+
+    Object.defineProperty(type.prototype, name, { value: func });
+} // end function
+
+
+
+Object.extend(Array, 'indexOf', function(searchElement, fromIndex) {
     for (var i = fromIndex || 0; i < this.length; i++)
         if (this[i] === searchElement)
             return i;
     return -1;
-} // end function
+});
 
 
 
-Array.prototype.pushArray = function() {
+
+Object.extend(Array, 'pushArray', function() {
     var toPush = this.concat.apply([], arguments);
     for (var i = 0, len = toPush.length; i < len; i++)
         this.push(toPush[i]);
-} // end function
+});
 
 
 
-Date.prototype.getDayName = function() {
+Object.extend(Date, 'getDayName', function() {
     switch (this.getDay()) {
         case 0: return 'Sunday';
         case 1: return 'Monday';
@@ -35,11 +54,11 @@ Date.prototype.getDayName = function() {
         case 5: return 'Friday';
         case 6: return 'Saturday';
     } // end switch
-} // end function
+});
 
 
 
-Date.prototype.getMonthName = function() {
+Object.extend(Date, 'getMonthName', function() {
     switch (this.getMonth()) {
         case 0: return 'January';
         case 1: return 'February';
@@ -54,11 +73,11 @@ Date.prototype.getMonthName = function() {
         case 10: return 'November';
         case 11: return 'December';
     } // end switch
-} // end function
+});
 
 
 
-Date.prototype.format = function(format) {
+Object.extend(Date, 'format', function(format) {
     var dateParts = {
         'd+': this.getDate(),
         'h+': this.getHours(),
@@ -85,18 +104,17 @@ Date.prototype.format = function(format) {
             format = format.replace(RegExp.$1, value);
         } // end if
     return format;
-} // end function
+});
 
 
 
-Date.prototype.is = function(date) {
+Object.extend(Date, 'is', function(date) {
     return this.getTime() == date.getTime();
-} // end function
+});
 
 
 
-// Returns the name of a function as initially defined.
-Function.prototype.getName = function() {
+Object.extend(Function, 'getName', function() {
     if (this.name)
         return this.name;
 
@@ -105,7 +123,7 @@ Function.prototype.getName = function() {
     var end = funcString.indexOf('(');
     var name = funcString.substring(start, end).trim();
     return name;
-} // end function
+});
 
 
 
@@ -114,63 +132,81 @@ Function.prototype.getName = function() {
 // Number.is(5); // returns true
 // Function.is(String); // returns true since String is a "function"
 // Date.is('1/1/2000'); // returns false since the arguement is a String
-Function.prototype.is = function(obj) {
+Object.extend(Function, 'is', function(obj) {
     return obj != undefined && obj != null &&
         (obj.constructor == this || obj instanceof this);
-} // end function
+});
 
 
 
-Object.isBasic = function(obj) {
-    if (typeof obj == 'undefined' || obj == null)
-        return false;
+Object.extend(Object, 'safe', function(accessor) {
+    if (!accessor || !String.is(accessor))
+        return;
 
-    return obj.constructor == String || obj.constructor == Number ||
-        obj.constructor == Boolean || obj.constructor == Date;
-} // end function
+    var lines = accessor.split('.');
+    var obj = this;
+    var result;
+    for (var l in lines) {
+        var line = lines[l];
+        if (line.indexOf('(') > -1 &&
+            typeof obj[line.split('(')[0].trim()] != 'function')
+            return null;
+
+        var evalStr = '';
+        if (obj)
+            evalStr += 'obj.';
+        evalStr += line;
+        result = eval(evalStr);
+        if (result == null)
+            return null;
+        obj = result;
+    } // end for
+
+    return result || null;
+});
 
 
 
-String.prototype.contains = String.prototype.contains || function(str) {
+Object.extend(String, 'contains', function(str) {
     return this.indexOf(str) != -1;
-} // end function
+});
 
 
 
-String.prototype.endsWith = String.prototype.endsWith || function(str) {
+Object.extend(String, 'endsWith', function(str) {
     if (this == '' || !str)
         return false;
 
     var index = this.lastIndexOf(str);
     return index == this.length - str.length;
-} // end function
+});
 
 
 
-String.prototype.is = String.prototype.is || function(str) {
+Object.extend(String, 'is', function(str) {
     if (typeof str == 'undefined' || !str.toString)
         return false;
 
     if (!String.is(str))
         str = str.toString();
     return this.toUpperCase() == str.toUpperCase();
-} // end function
+});
 
 
 
-String.prototype.remove = String.prototype.remove || function(str) {
+Object.extend(String, 'remove', function(str) {
     return this.split(str).join('');
-} // end function
+});
 
 
 
-String.prototype.removeIgnoreCase = String.prototype.removeIgnoreCase || function(str) {
+Object.extend(String, 'removeIgnoreCase', function(str) {
     return this.replaceIgnoreCase(str, '');
-} // end function
+});
 
 
 
-String.prototype.replaceIgnoreCase = String.prototype.replaceIgnoreCase || function(oldValue, newValue) {
+Object.extend(String, 'replaceIgnoreCase', function(oldValue, newValue) {
     if (!oldValue)
         return this;
 
@@ -189,30 +225,51 @@ String.prototype.replaceIgnoreCase = String.prototype.replaceIgnoreCase || funct
     result += this.substring(lastIndex);
 
     return result;
-} // end function
+});
 
 
 
-String.prototype.startsWith = String.prototype.startsWith || function(str) {
+Object.extend(String, 'startsWith', function(str) {
     if (this == '' || !str) return false;
     var index = this.indexOf(str);
     return index == 0;
-} // end function
+});
 
 
 
-String.prototype.trim = String.prototype.trim || function() {
+Object.extend(String, 'trim', function() {
     return this.replace(/^\s+|\s+$/g, '');
-} // end function
+});
 
 
 
-String.prototype.trimLeft = String.prototype.trimLeft || function() {
+Object.extend(String, 'trimLeft', function() {
     return this.replace(/^\s+/, '');
+});
+
+
+
+Object.extend(String, 'trimRight', function() {
+    return this.replace(/\s+$/, '');
+});
+
+
+
+Object.isBasic = function(obj) {
+    return typeof obj == 'undefined' || obj == null ||
+        obj.constructor == String || obj.constructor == Number ||
+        obj.constructor == Boolean || obj.constructor == Date;
 } // end function
 
 
 
-String.prototype.trimRight = String.prototype.trimRight || function() {
-    return this.replace(/\s+$/, '');
+Object.isPromise = function(obj) {
+    // Inspired by http://stackoverflow.com/questions/13075592/how-can-i-tell-if-an-object-is-a-jquery-promise-deferred/13075985#13075985.
+    // Thanks, Jeremy Banks!
+    if (!jQuery || !obj || !Function.is(obj.then))
+        return false;
+
+    var promiseThenSrc = String(jQuery.Deferred().then);
+    var objThenSrc = String(obj.then);
+    return promiseThenSrc == objThenSrc;
 } // end function

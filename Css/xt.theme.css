@@ -28,7 +28,6 @@
 #nav a {
     color: #FFC90E;
     font-size: 20px;
-    font-weight: bold;
     margin: 2px 8px;
     text-decoration: none;
 }
@@ -44,8 +43,6 @@
     width: expression(document.body.clientWidth > 900 ? "900px" : "auto");
 }
 
-.error { color: #BB0000; font-weight: bold; }
-
 html { background-color: #FFFFFF; }
 
 body {
@@ -59,6 +56,18 @@ body {
 
 a { color: #4444CC; text-decoration: none; }
 a:hover { color: #FFC90E; text-decoration: underline; }
+
+div.alert, div.danger, div.success {
+    border-style: solid;
+    border-width: 1px;
+    margin-bottom: 20px;
+    padding: 4px 10px;
+}
+div.alert a:hover, div.danger a:hover, div.success a:hover { color: #4444CC; }
+div.alert { background-color: #EEEEEE; border-color: #CCCCCC; color: #222222; }
+div.danger { background-color: #FFDDDD; border-color: #EEBBBB; color: #662222; }
+div.success { background-color: #EEFFEE; border-color: #BBEEBB; color: #226622; }
+
 form { margin: 0px; }
 
 h1 {

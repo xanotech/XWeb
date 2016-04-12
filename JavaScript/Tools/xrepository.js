@@ -82,7 +82,7 @@ XRepository.Cursor = function(type, criteria, repository) {
 XRepository.Cursor.prototype.count = function(applySkipLimit) {
     if (applySkipLimit) {
         var result = this.toArray();
-        if (XRepository.isPromise(result)) {
+        if (Object.isPromise(result)) {
             var deferred = jQuery.Deferred();
             result.done(function(objects) {
                 deferred.resolve(objects.length);
@@ -107,7 +107,7 @@ XRepository.Cursor.prototype.forEach = function(callback) {
     } // end function
 
     var result = this.toArray();
-    if (XRepository.isPromise(result))
+    if (Object.isPromise(result))
         result.done(performForEach);
     else
         performForEach(result);
@@ -157,7 +157,7 @@ XRepository.Cursor.prototype.map = function(callback) {
     } // end function
 
     var result = this.toArray();
-    if (XRepository.isPromise(result)) {
+    if (Object.isPromise(result)) {
         var deferred = jQuery.Deferred();
         result.done(function(objects) {
             deferred.resolve(performMap(objects));
@@ -174,7 +174,7 @@ XRepository.Cursor.prototype.next = function() {
         return;
 
     var array = this.toArray();
-    if (XRepository.isPromise(array))
+    if (Object.isPromise(array))
         array = array.array;
     if (array)
         return array[this.index++];
@@ -184,7 +184,7 @@ XRepository.Cursor.prototype.next = function() {
 
 XRepository.Cursor.prototype.size = function() {
     var array = this.toArray();
-    if (XRepository.isPromise(array))
+    if (Object.isPromise(array))
         array = array.array;
     if (array)
         return array.length;
@@ -240,7 +240,7 @@ XRepository.Cursor.prototype.sort = function(sortObj) {
 XRepository.Cursor.prototype.toArray = function() {
     if (this.data == null) {
         var result = this.repository._fetch(this);
-        if (XRepository.isPromise(result))
+        if (Object.isPromise(result))
             result.done(function(array) {
                 result.array = array;
             });
@@ -383,7 +383,7 @@ XRepository.JSRepository.prototype.create = function(type) {
     var obj = new type();
 
     var propertyMap = this._getPropertyMap(type);
-    if (jQuery(propertyMap).is(function() { return true; }))
+    if (XRepository._getProperties(propertyMap).length)
         return obj;
 
     obj._tableNames = tableNames;
@@ -412,7 +412,7 @@ XRepository.JSRepository.prototype.find = function(type, criteria) {
 XRepository.JSRepository.prototype.findOne = function(type, criteria) {
     XRepository._validateRequiredLibraries();
     var result = this.find(type, criteria).limit(1).toArray();
-    if (XRepository.isPromise(result)) {
+    if (Object.isPromise(result)) {
         var deferred = jQuery.Deferred();
         result.done(function(objects) {
             deferred.resolve(objects[0] || null);
@@ -497,7 +497,7 @@ XRepository.JSRepository.prototype.pluralize = function(word) {
         return word.substring(0, word.length - 1) + 'ies';
     else
         return word + 's';
-}
+} // end function
 
 
 
@@ -507,12 +507,10 @@ XRepository.JSRepository.prototype.remove = function(objects) {
         throw new Error('Error in JSRepository.remove: objects argument cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
             XRepository._formatObjectForError(objects, 'objects') + '.');
-    if (!objects)
-        return;
 
     if (XRepository.Cursor.is(objects)) {
         objects = objects.toArray();
-        if (XRepository.isPromise(objects)) {
+        if (Object.isPromise(objects)) {
             var repo = this;
             var deferred = jQuery.Deferred();
             objects.done(function(objs) {
@@ -549,12 +547,10 @@ XRepository.JSRepository.prototype.save = function(objects) {
         throw new Error('Error in JSRepository.save: objects argument cannot be a basic type ' +
             'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
             XRepository._formatObjectForError(objects, 'objects') + '.');
-    if (!objects)
-        return;
 
     if (XRepository.Cursor.is(objects)) {
         objects = objects.toArray();
-        if (XRepository.isPromise(objects)) {
+        if (Object.isPromise(objects)) {
             var repo = this;
             var deferred = jQuery.Deferred();
             objects.done(function(objs) {
@@ -1240,7 +1236,7 @@ XRepository.JSRepository.prototype._handleResponse = function(request, handle) {
         var deferred = jQuery.Deferred();
         request.done(function() {
             var result = handle();
-            if (result.promise && XRepository.isPromise(result.promise))
+            if (result && Object.isPromise(result.promise))
                 result.promise.done(function() {
                     deferred.resolve(result);
                 });
@@ -1263,7 +1259,7 @@ XRepository.JSRepository.prototype._initCursorData = function(cursor) {
     // of the cursor's type and their mapped column name (assuming cursor.type
     // is a Function / "class" and when constructed it contains properties).
     var propertyMap = this._getPropertyMap(cursor.type);
-    if (jQuery(propertyMap).is(function() { return true; })) {
+    if (XRepository._getProperties(propertyMap).length) {
         var columns = [];
         var tableNames = this._getTableNames(cursor.type);
         var allColumns = {}; // Map of column names keyed by their upper-case value
@@ -1345,7 +1341,7 @@ XRepository.JSRepository.prototype._removeExtraneousProperties = function(object
     var cleanObjs = [];
     var repo = this;
     jQuery.each(objects, function(index, obj) {
-        if (!obj || Object.isBasic(obj) || Array.is(obj))
+        if (Object.isBasic(obj) || Array.is(obj))
             return true;
 
         // Set all properties to upper case
@@ -1433,7 +1429,7 @@ XRepository.JSRepository.prototype._validateCriterionArray = function(array, met
         if (!element['Name'] || !element['Operation'])
             throw new Error('Error in JSRepository.' + methodName + ': element ' + index +
                 ' in criteria array missing Name and / or Operation properties\n' +
-                '(element = ' + JSON.stringify(element) + ').');
+                XRepository._formatObjectForError(element, 'array[' + index + ']') + '.');
     });
 } // end function
 
@@ -1443,12 +1439,9 @@ XRepository.JSRepository.prototype._validateEntityArray = function(objects, meth
     jQuery.each(objects, function(index, obj) {
         if (Object.isBasic(obj))
             throw new Error('Error in JSRepository.' + methodName +
-                ': element ' + index + ' in objects' +
-                'array argument cannot be a basic type but must instead be an entity object\n' +
-                XRepository._formatObjectForError(obj, 'objects[' + index + ']') + '.');
-        else if (!obj)
-            throw new Error('Error in JSRepository.' + methodName +
-                ': element ' + index + ' in objects array argument is null or undefined\n' +
+                ': element ' + index + ' in objects ' +
+                'array is either basic (ie String, Number, etc), undefined or null ' +
+                'and must instead be an entity object\n' +
                 XRepository._formatObjectForError(obj, 'objects[' + index + ']') + '.');
     });
 } // end function
@@ -1511,12 +1504,6 @@ XRepository.Reference.prototype.getForeignKey = function() {
 
 
 
-XRepository.isPromise = function(obj) {
-    return obj && Function.is(obj.done) && Function.is(obj.promise);
-} // end function
-
-
-
 XRepository._formatObjectForError = function(object, objectName) {
     return '(typeof ' + objectName + ' = ' + typeof object + ', ' +
         objectName + ' = ' + JSON.stringify(object) + ')';
@@ -1562,6 +1549,16 @@ XRepository._getBase = function(type) {
     if (type == Object)
         return null;
     return Object;
+} // end function
+
+
+
+XRepository._getProperties = function(obj) {
+    var properties = [];
+    jQuery.each(obj, function(property) {
+        properties.push(property);
+    });
+    return properties;
 } // end function
 
 
