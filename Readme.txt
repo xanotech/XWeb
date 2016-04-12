@@ -5,13 +5,13 @@ Include the following lines at the appropriate locations in a web csproj file.
 Put these settings among the other <ItemGroup> nodes...
 
   <ItemGroup>
-    <Content Include="..\..\XanotechWeb\**\*.css">
+    <Content Include="..\..\XWeb\**\*.css">
       <Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="..\..\XanotechWeb\**\*.js">
+    <Content Include="..\..\XWeb\**\*.js">
       <Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="..\..\XanotechWeb\**\*.png">
+    <Content Include="..\..\XWeb\**\*.png">
       <Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
