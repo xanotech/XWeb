@@ -2,6 +2,8 @@
 .border-light { border: solid 1px #AAAAAA; }
 .bottom { vertical-align: bottom; }
 .center { text-align: center; }
+.float-left { float: left; }
+.float-right { float: right; }
 .hidden { display: none; }
 .indent { margin-left: 50px; }
 .inline { display: inline; }
