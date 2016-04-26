@@ -773,7 +773,7 @@ XRepository.JSRepository.prototype._fetch = function(cursor) {
             var deferred = jQuery.Deferred();
             jQuery.when.apply(jQuery, joinObjects.promises).done(function() {
                 repo._applyJoinObjects(objects, joinObjects);
-                deferred.resolve();
+                deferred.resolve(objects);
             });
             objects.promise = deferred.promise();
         } else
@@ -792,69 +792,115 @@ XRepository.JSRepository.prototype._fetchStringJoins = function(objects, cursor)
     jQuery.each(cursor._joinObjects || {}, function(property, objects) {
         if (property != 'String')
             joinObjects[property] = objects;
-   });
+    });
 
     var strings = this._normalizeStrings(cursor._joinObjects && cursor._joinObjects.String);
     if (!strings || !strings.length)
         return joinObjects;
 
     var repo = this;
+    var deferreds = []; // Used to keep track of deferreds sent to executeAsyncJoin
+
+    function createJoinCursor(sourceObjects, reference) {
+        var criterion = new XRepository.Criterion();
+        criterion.Operation = '=';
+        if (reference.isMultiple) {
+            criterion.Name = reference.getForeignKey();
+            criterion.Value = [];
+            jQuery.each(sourceObjects, function(index, obj) {
+                criterion.Value.push(obj[repo._getIdProperty(reference.source)]);
+            });
+        } else {
+            criterion.Name = repo._getIdProperty(reference.target);
+            criterion.Value = [];
+            jQuery.each(sourceObjects, function(index, obj) {
+                var value = obj[reference.getForeignKey()];
+                if (value != null)
+                    criterion.Value.push(value);
+            });
+        } // end if-else
+        return repo.find(reference.target, criterion).join(sourceObjects);
+    } // end function
+
+    function drillDown(objects, properties) {
+        // Start sourceObjects equal to objects.  It is later moved to
+        // the combined values of objects' property (and sub properties).
+        var sourceObjects = objects;
+
+        // Loops through all individual property names defined in "string"
+        // except the last one (which is the one we're fetching for).
+        // For each propertyName, sourceObjects is set to all the objects
+        // of sourceObjects returned by that property name.
+        jQuery.each(properties, function(index, property) {
+            if (!sourceObjects || !sourceObjects.length)
+                return false;
+
+            var newSourceObjects = [];
+            // Get all objects for propertyName
+            jQuery.each(sourceObjects, function(index, object) {
+                var value = object[property];
+                if (Array.is(value))
+                    newSourceObjects.pushArray(value);
+                else if (value)
+                    newSourceObjects.push(value);
+            });
+            sourceObjects = newSourceObjects;
+        });
+
+        return sourceObjects;
+    } // end function
+
+    function executeAsyncJoin(index) {
+        // Get the deferred to be executed from deferreds.  If undefined,
+        // there must not be any more; return cause the job is done.
+        var deferred = deferreds[index];
+        if (!deferred)
+            return;
+
+        var properties = strings[index].split('.');
+        var property = properties.pop();
+        var sourceObjects = drillDown(objects, properties);
+
+        if (!sourceObjects || !sourceObjects.length) {
+            deferred.resolve();
+            executeAsyncJoin(index + 1);
+        } // end if
+
+        var reference = getJoinReference(sourceObjects[0].constructor, property);
+        var cursor = createJoinCursor(sourceObjects, reference).toArray().done(function(joinObjs) {
+            joinObjs = XRepository._createJoinObjects(joinObjs);
+            // If there isn't an element for the reference target, that means there were
+            // no results from the find.  Create an empty element so the property will
+            // be populated and not re-fetched when accessed.
+            joinObjs[reference.target.getName()] = joinObjs[reference.target.getName()] || [];
+            repo._applyJoinObjects(sourceObjects, joinObjs);
+
+            deferred.resolve();
+            executeAsyncJoin(index + 1);
+        });
+    } // end function
+
+    function getJoinReference(type, property) {
+        var reference = repo._getReference(type, property);
+        if (!reference)
+            throw new Error('Error in join parameter "' + string + '".  ' +
+                type.getName() + ' does not have a reference named "' +
+                property + '".');
+        return reference;
+    } // end function
+
     if (this.isSynchronized) {
         jQuery.each(strings, function(index, string) {
-            var sourceObjects = objects;
-
-            // Loops through all individual property names defined in "string"
-            // except the last one (which is the one we're fetching for).
-            // For each propertyName, sourceObjects is set to all the objects
-            // of sourceObjects returned by that property name.
-            var split = string.split('.');
-            var joinPropertyName = split.splice(split.length - 1)[0];
-            jQuery.each(split, function(index, propertyName) {
-                if (!sourceObjects || !sourceObjects.length)
-                    return false;
-
-                var newSourceObjects = [];
-                // Get all objects for propertyName
-                jQuery.each(sourceObjects, function(index, object) {
-                    var propertyValue = object[propertyName];
-                    if (Array.is(propertyValue))
-                        newSourceObjects.pushArray(propertyValue);
-                    else if (propertyValue)
-                        newSourceObjects.push(propertyValue);
-                });
-                sourceObjects = newSourceObjects;
-            });
+            var properties = string.split('.');
+            var property = properties.pop();
+            var sourceObjects = drillDown(objects, properties);
 
             if (!sourceObjects || !sourceObjects.length)
                 return false;
 
-            var type = sourceObjects[0].constructor;
-            var reference = repo._getReference(type, joinPropertyName);
-            if (!reference)
-                throw new Error('Error in join parameter "' + string + '".  ' +
-                    type.getName() + ' does not have a reference named "' +
-                    joinPropertyName + '".');
-
-            var criterion = new XRepository.Criterion();
-            criterion.Operation = '=';
-            if (reference.isMultiple) {
-                criterion.Name = reference.getForeignKey();
-                criterion.Value = [];
-                jQuery.each(sourceObjects, function(index, obj) {
-                    criterion.Value.push(obj[repo._getIdProperty(type)]);
-                });
-            } else {
-                criterion.Name = repo._getIdProperty(reference.target);
-                criterion.Value = [];
-                jQuery.each(sourceObjects, function(index, obj) {
-                    var value = obj[reference.getForeignKey()];
-                    if (value != null)
-                        criterion.Value.push(value);
-                });
-            } // end if-else
-
-            var joinObjs = repo.find(reference.target, criterion).join(sourceObjects).toArray();
-            var joinObjs = XRepository._createJoinObjects(joinObjs);
+            var reference = getJoinReference(sourceObjects[0].constructor, property);
+            var joinObjs = createJoinCursor(sourceObjects, reference).toArray();
+            joinObjs = XRepository._createJoinObjects(joinObjs);
             // If there isn't an element for the reference target, that means there were
             // no results from the find.  Create an empty element so the property will
             // be populated and not re-fetched when accessed.
@@ -862,6 +908,22 @@ XRepository.JSRepository.prototype._fetchStringJoins = function(objects, cursor)
             repo._applyJoinObjects(sourceObjects, joinObjs);
         });
     } else {
+        // The repository is asynchronous, for each string, create a promise which
+        // will do the work of fetching the properties' values.  Each promise starts
+        // the next and assumes the previous is done.  The first promise should not
+        // need the previous done and will be initiated after the promises are all
+        // constructed and added to joinObjects.promises.
+        joinObjects.promises = [];
+
+        jQuery.each(strings, function(index, string) {
+            var deferred = jQuery.Deferred();
+            deferreds.push(deferred);
+            var promise = deferred.promise();
+            joinObjects.promises.push(promise);
+        });
+
+        if (deferreds.length)
+            executeAsyncJoin(0);
     } // end if
 
     return joinObjects;
@@ -1238,6 +1300,7 @@ XRepository.JSRepository.prototype._handleResponse = function(request, handle) {
             var result = handle();
             if (result && Object.isPromise(result.promise))
                 result.promise.done(function() {
+                    delete result.promise; // Remove the promise property added to result
                     deferred.resolve(result);
                 });
             else
