@@ -1274,10 +1274,15 @@ XRepository.JSRepository.prototype._getTableNames = function(type, isSilent) {
             var tableDef = this._getTableDefinition(type.getName());
             tableNames.push(tableDef.FullName);
         } catch (e) {
-            // _getTableDefinition throws errors when the table
-            // indicated by type.getName() does not exist.  In those cases,
-            // catch the exception and move on.  _getTableNames will
-            // throw an exception if no tables are found.
+            // Look at the caught error.  If the message indicates an actual
+            // missing table, swallow it.  The underlying server code throws
+            // the exception deliberately.  _getTableNames will throw an
+            // exception if no tables are found.  If the error is something else,
+            // throw it.
+            if (!(e.message &&
+                e.message.startsWith('The table') &&
+                e.message.endsWith('is not a valid table.')))
+                throw e;
         } // end try-catch
 
         type = XRepository._getBase(type);
@@ -1516,20 +1521,15 @@ XRepository.JSRepository.prototype._validateResponse = function(ajaxRequest, met
         var error;
         try {
             var errorObj = JSON.parse(ajaxRequest.responseText);
-            if (errorObj.message || errorObj.stack) {
-                var message = errorObj.message || '';
-                var stack = errorObj.stack || '';
-                if (stack)
-                    stack = 'Stack Trace...\n' + stack;
-                error = [message, stack].join('\n\n');
-            } // end if
+            error = new Error(errorObj.message || '');
+            error.serverStack = errorObj.stack || '';
         } catch (e) {
             // Looks like JSON.parse failed.
-            error = 'Error in JSRepository.'+ methodName +
+            error = new Error('Error in JSRepository.'+ methodName +
                 ': unable to parse server error response.  Response data...\n' +
-                ajaxRequest.responseText;
+                ajaxRequest.responseText);
         } // end try-catch
-        throw new Error(error);
+        throw error;
     } // end if
 } // end function
 
