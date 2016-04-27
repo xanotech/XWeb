@@ -11,30 +11,30 @@ var XRepository = {}; // Namespace object for all XRepository classes
 
 
 
-// Constructs a new XRepository.Criterion object with Name, Operation, and Value.
-// new XRepository.Criterion(); // Name = '', Operation = '=', Value = null
-// new XRepository.Criterion('CustomerId'); // Name = 'CustomerId', Operation = '=', Value = null
-// new XRepository.Criterion('CustomerId', 101); // Name = 'CustomerId', Operation = '=', Value = 101
-// new XRepository.Criterion('Street', 'LIKE', '%Main%'); // Name = 'Street', Operation = 'LIKE', Value = '%Main%'
+// Constructs a new XRepository.Criterion object with name, operation, and value.
+// new XRepository.Criterion(); // name = '', operation = '=', value = null
+// new XRepository.Criterion('CustomerId'); // name = 'CustomerId', operation = '=', value = null
+// new XRepository.Criterion('CustomerId', 101); // name = 'CustomerId', operation = '=', value = 101
+// new XRepository.Criterion('Street', 'LIKE', '%Main%'); // name = 'Street', operation = 'LIKE', value = '%Main%'
 XRepository.Criterion = function() {
-    this.Name = '';
-    this.Operation = 'EqualTo';
-    this.Value = null;
+    this.name = '';
+    this.operation = 'EqualTo';
+    this.value = null;
 
     switch(arguments.length) {
         case 0:
             break;
         case 1:
-            this.Name = arguments[0];
+            this.name = arguments[0];
             break;
         case 2:
-            this.Name = arguments[0];
-            this.Value = arguments[1];
+            this.name = arguments[0];
+            this.value = arguments[1];
             break;
         default:
-            this.Name = arguments[0];
-            this.Operation = arguments[1];
-            this.Value = arguments[2];
+            this.name = arguments[0];
+            this.operation = arguments[1];
+            this.value = arguments[2];
     } // end switch
 } // end function
 
@@ -803,20 +803,20 @@ XRepository.JSRepository.prototype._fetchStringJoins = function(objects, cursor)
 
     function createJoinCursor(sourceObjects, reference) {
         var criterion = new XRepository.Criterion();
-        criterion.Operation = '=';
+        criterion.operation = '=';
         if (reference.isMultiple) {
-            criterion.Name = reference.getForeignKey();
-            criterion.Value = [];
+            criterion.name = reference.getForeignKey();
+            criterion.value = [];
             jQuery.each(sourceObjects, function(index, obj) {
-                criterion.Value.push(obj[repo._getIdProperty(reference.source)]);
+                criterion.value.push(obj[repo._getIdProperty(reference.source)]);
             });
         } else {
-            criterion.Name = repo._getIdProperty(reference.target);
-            criterion.Value = [];
+            criterion.name = repo._getIdProperty(reference.target);
+            criterion.value = [];
             jQuery.each(sourceObjects, function(index, obj) {
                 var value = obj[reference.getForeignKey()];
                 if (value != null)
-                    criterion.Value.push(value);
+                    criterion.value.push(value);
             });
         } // end if-else
         return repo.find(reference.target, criterion).join(sourceObjects);
@@ -1046,55 +1046,55 @@ XRepository.JSRepository.prototype._fixCriteria = function(criteria) {
     var newCriteria = [];
     var repo = this;
     jQuery.each(criteria, function(index, criterion) {
-        criterion = new XRepository.Criterion(criterion.Name,
-            criterion.Operation, criterion.Value);
-        if (!criterion.Operation)
-            criterion.Operation = '=';
+        criterion = new XRepository.Criterion(criterion.name,
+            criterion.operation, criterion.value);
+        if (!criterion.operation)
+            criterion.operation = '=';
 
-        criterion.Operation = criterion.Operation.trim().toUpperCase();
-        switch (criterion.Operation) {
+        criterion.operation = criterion.operation.trim().toUpperCase();
+        switch (criterion.operation) {
             case '=':
             case '==':
             case 'EQUALTO':
-                criterion.Operation = 'EqualTo';
+                criterion.operation = 'EqualTo';
                 break;
             case '>':
             case 'GREATERTHAN':
-                criterion.Operation = 'GreaterThan';
+                criterion.operation = 'GreaterThan';
                 break;
             case '>=':
             case 'GREATERTHANOREQUALTO':
-                criterion.Operation = 'GreaterThanOrEqualTo';
+                criterion.operation = 'GreaterThanOrEqualTo';
                 break;
             case '<':
             case 'LESSTHAN':
-                criterion.Operation = 'LessThan';
+                criterion.operation = 'LessThan';
                 break;
             case '<=':
             case 'LESSTHANOREQUALTO':
-                criterion.Operation = 'LessThanOrEqualTo';
+                criterion.operation = 'LessThanOrEqualTo';
                 break;
             case '<>':
             case '!=':
             case 'NOTEQUALTO':
-                criterion.Operation = 'NotEqualTo';
+                criterion.operation = 'NotEqualTo';
                 break;
             case 'LIKE':
-                criterion.Operation = 'Like';
+                criterion.operation = 'Like';
                 break;
             case 'NOT LIKE':
-                this.Operation = 'NotLike';
+                this.operation = 'NotLike';
                 break;
             default:
-                throw new Error('OperationType string "' + str + '" is invalid.  ' +
+                throw new Error('operation value "' + str + '" is invalid.  ' +
                     'Acceptable values are: =, >, >=, <, <=, !=, LIKE, NOT LIKE (== and <> are also accepted).');
         } // end switch
 
         if (repo.isUsingLikeForEquals) {
-            if (criterion.Operation == 'EqualTo')
-                criterion.Operation = 'Like';
-            if (criterion.Operation == 'NotEqualTo')
-                criterion.Operation = 'NotLike';
+            if (criterion.operation == 'EqualTo')
+                criterion.operation = 'Like';
+            if (criterion.operation == 'NotEqualTo')
+                criterion.operation = 'NotLike';
         } // end if
 
         newCriteria.push(criterion);
@@ -1482,7 +1482,7 @@ XRepository.JSRepository.prototype._validateCriteria = function(type, criteria, 
 
     var repo = this;
     jQuery.each(criteria, function(index, criterion) {
-        criterion.Name = repo._getMappedColumn(type, criterion.Name);
+        criterion.name = repo._getMappedColumn(type, criterion.name);
     });
 
     return criteria;
@@ -1494,9 +1494,9 @@ XRepository.JSRepository.prototype._validateCriterionArray = function(array, met
     jQuery.each(array, function(index, element) {
         if (XRepository.Criterion.is(element))
             return;
-        if (!element['Name'] || !element['Operation'])
+        if (!element['name'] || !element['operation'])
             throw new Error('Error in JSRepository.' + methodName + ': element ' + index +
-                ' in criteria array missing Name and / or Operation properties\n' +
+                ' in criteria array missing name and / or operation properties\n' +
                 XRepository._formatObjectForError(element, 'array[' + index + ']') + '.');
     });
 } // end function
