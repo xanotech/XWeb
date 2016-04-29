@@ -238,15 +238,23 @@ XRepository.Cursor.prototype.sort = function(sortObj) {
 
 
 XRepository.Cursor.prototype.toArray = function() {
+    var callback = arguments[0];
     if (this.data == null) {
         var result = this.repository._fetch(this);
         if (Object.isPromise(result))
             result.done(function(array) {
                 result.array = array;
+                if (Function.is(callback))
+                    callback(array);
             });
         this.data = result;
         this.index = 0;
-    } // end if
+    } else if (Function.is(callback)) {
+        var array = this.data;
+        if (Object.isPromise(array))
+            array = array.array;
+        callback(array);
+    } // end if-else
     return this.data;
 } // end function
 
@@ -710,7 +718,7 @@ XRepository.JSRepository.prototype._defineReferenceProperty = function(reference
         if (reference.isMultiple)
             propertyName = this.pluralize(propertyName);
         propertyName = propertyName.charAt(0).toLowerCase() + propertyName.substring(1);
-        reference.propertyName = propertyName
+        reference.propertyName = propertyName;
     } // end if
 
     var repo = this;
