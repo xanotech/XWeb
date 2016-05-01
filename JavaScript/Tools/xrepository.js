@@ -293,7 +293,8 @@ XRepository.JSRepository = function(path, isSynchronized) {
         primaryKeys: {},
         propertyMap: {},
         tableDefinition: {},
-        tableName: {}
+        tableName: {},
+        types: []
     };
 
     // Check to see if isSynchronized is a Boolean.  In order to deal with
@@ -438,7 +439,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this.count = function(type, criteria) {
         validateRequiredLibraries();
-        validateTypeArgument(type, 'type', 'count');
+        rememberType(type, 'type', 'count');
         criteria = validateCriteria(type, criteria, 'count');
         var cursor = createCursor(type, criteria);
 
@@ -466,7 +467,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     // defined by the server will be present (although initialized to null).
     this.create = function(type) {
         validateRequiredLibraries();
-        validateTypeArgument(type, 'type', 'create');
+        rememberType(type, 'type', 'create');
         var tableNames = getTableNames(type);
         var obj = new type();
 
@@ -707,7 +708,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this.find = function(type, criteria) {
         validateRequiredLibraries();
-        validateTypeArgument(type, 'type', 'find');
+        rememberType(type, 'type', 'find');
         criteria = validateCriteria(type, criteria, 'find');
         return createCursor(type, criteria);
     } // end function
@@ -891,35 +892,54 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
-    function getCachedValue(cache, tableName, lookupPath) {
+    function getCachedValue(cacheName, tableName, isSynchronized) {
         var tableName = tableName.toUpperCase();
-        var cachedValue = cache[tableName];
+        var cachedValue = cache[cacheName][tableName];
         if (cachedValue)
             if (Error.is(cachedValue))
                 throw cachedValue;
             else
-                return cache[tableName];
+                return cachedValue;
 
-        lookupPath = repo.path.root + '/' + lookupPath;
+        var lookupPath = 'get' + cacheName[0].toUpperCase() + cacheName.slice(1);
+        lookupPath = repo.path.root + '/' + repo.path[lookupPath];
         var request = jQuery.ajax(lookupPath, {
-            async: false,
+            async: !isSynchronized,
             cache: false,
             method: 'POST',
             data: { tableName: tableName }
         });
-        try {
-            validateResponse(request);
-            cache[tableName] = JSON.parse(request.responseText);
-        } catch (e) {
-            cache[tableName] = e;
-            throw e;
-        } // end try catch
-        return cache[tableName];
+
+        function cacheResult() {
+            try {
+                validateResponse(request);
+                var value = JSON.parse(request.responseText)
+                cache[cacheName][tableName] = value;
+                return value;
+            } catch (e) {
+                cache[cacheName][tableName] = e;
+                throw e;
+            } // end try catch
+        } // end function
+
+        if (isSynchronized)
+            return cacheResult();
+        else {
+            var deferred = jQuery.Deferred();
+            request.always(function() {
+                try {
+                    deferred.resolve(cacheResult());
+                } catch (e) {
+                    deferred.reject(e);
+                } // end try-catch
+            });
+            return deferred.promise();
+        } // end if-else
     } // end function
 
 
     function getColumns(tableName) {
-        return getCachedValue(cache.columns, tableName, repo.path.getColumns);
+        return getCachedValue('columns', tableName, true);
     } // end function
 
 
@@ -988,7 +1008,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     function getPrimaryKeys(typeOrTable) {
         if (String.is(typeOrTable))
-            return getCachedValue(cache.primaryKeys, typeOrTable, repo.path.getPrimaryKeys);
+            return getCachedValue('primaryKeys', typeOrTable, true);
 
         if (Function.is(typeOrTable)) {
             var tableNames = getTableNames(typeOrTable);
@@ -1045,7 +1065,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     function getTableDefinition(tableName) {
-        return getCachedValue(cache.tableDefinition, tableName, repo.path.getTableDefinition);
+        return getCachedValue('tableDefinition', tableName, true);
     } // end function
 
 
@@ -1097,6 +1117,112 @@ XRepository.JSRepository = function(path, isSynchronized) {
                     deferred.resolve(result);
             });
             return deferred.promise();
+        } // end if-else
+    } // end function
+
+
+    this.init = function() {
+        // Look at all arguments.  For each argument that is a type
+        // (or an array of types), remember that type.
+        jQuery.each(arguments, function(index, arg) {
+            var array = Array.is(arg) ? arg : [arg];
+            jQuery.each(array, function(index, type) {
+                rememberType(type);
+            });
+        });
+
+        if (this.isSynchronized) {
+            jQuery.each(cache.types, function(index, type) {
+                try {
+                    jQuery.each(getTableNames(type), function(index, tableName) {
+                        getColumns(tableName);
+                        getPrimaryKeys(tableName);
+                        getTableDefinition(tableName);
+                    });
+                } catch (e) {
+                    // If there are any errors associated with any types
+                    // or tableNames, just swallow and move on because
+                    // init should not stop.  The init method is fairly
+                    // aggressive in attempting to lookup types and many
+                    // are expected to throw errors.
+                } // end try-catch
+            });
+        } else {
+            // As is typical of asynchronous operations, the asynchronous
+            // init process is somewhat complex.  It essentially involves
+            // creating a mainDeferred that represents the entire effort
+            // with its promise returned.  The process itself involves
+            // two phases.  The first phase looks up the tableDefinitions
+            // for all remembered types.  The second phase uses those
+            // tableDefinitions to lookup their associated columns and
+            // primaryKeys.  When all the requests for columns and
+            // primaryKeys are done, the mainDeferred is resolved.
+            var mainDeferred = jQuery.Deferred();
+
+            // Waits for all requests to finish successfully and then looks up
+            // the columns and primaryKeys for each tableName.  Because
+            // jQuery's when immediately calls fail or always when any one
+            // of the requests passed to it fails, the logic of waiting is
+            // put inside a method.  The initial call occurs after the
+            // intially populating requests, but if any requests fail,
+            // that request is removed from requests and waitForRequests
+            // is called again.
+            function waitForRequests() {
+                jQuery.when.apply(jQuery, requests).done(function() {
+                    requests = [];
+                    jQuery.each(tableNames, function(index, tableName) {
+                        var value = getCachedValue('columns', tableName, false);
+                        if (Object.isPromise(value))
+                            requests.push(value);
+
+                        value = getCachedValue('primaryKeys', tableName, false);
+                        if (Object.isPromise(value))
+                            requests.push(value);
+
+                        // Get the tableDefinition again.  This time, tableName
+                        // will be a "full name" (schema.table).  Fetching it
+                        // again with full name should ensure that all metadata
+                        // is fully cached prior to use.
+                        value = getCachedValue('tableDefinition', tableName, false);
+                        if (Object.isPromise(value))
+                            requests.push(value);
+                    });
+                    jQuery.when.apply(jQuery.requests).always(mainDeferred.resolve);
+                });
+            } // end function
+
+            var requests = [];
+            var tableNames = [];
+            jQuery.each(cache.types, function(index, type) {
+                try {
+                    var value = getCachedValue('tableDefinition', type.getName(), false);
+                } catch (e) {
+                    return;
+                    // Exit the loop.  Sometimes getCachedValue throws an error.
+                    // These errors typically occur when it attempts to lookup
+                    // base tables that don't have corresponding tables.
+                    // Just swallow it because we don't want init to stop.
+                    // If any of the persistence methods are called for
+                    // entities that truly don't have tables, errors will
+                    // be thrown then.
+                } // end try-catch
+
+                if (Object.isPromise(value)) {
+                    requests.push(value);
+                    value.done(function(tableDef) {
+                        tableNames.push(tableDef.FullName);
+                    }).fail(function() {
+                        // Remove the failed request from requests and re-wait.
+                        requests.splice(requests.indexOf(value), 1);
+                        waitForRequests();
+                    });
+                } else
+                    tableNames.push(value.FullName);
+            });
+
+            waitForRequests();
+
+            return mainDeferred.promise();
         } // end if-else
     } // end function
 
@@ -1155,7 +1281,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this.mapColumn = function(type, propertyName, columnName) {
         validateRequiredLibraries();
-        validateTypeArgument(type, 'type', 'mapColumn');
+        rememberType(type, 'type', 'mapColumn');
         if (!String.is(propertyName))
             throw new Error('Error in JSRepository.mapColumn: propertyName argument is missing or is not a String.');
         if (!String.is(columnName))
@@ -1173,8 +1299,8 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this.mapMultipleReference = function(source, target, foreignKey, propertyName) {
         validateRequiredLibraries();
-        validateTypeArgument(source, 'source', 'mapMultipleReference');
-        validateTypeArgument(target, 'target', 'mapMultipleReference');
+        rememberType(source, 'source', 'mapMultipleReference');
+        rememberType(target, 'target', 'mapMultipleReference');
 
         var ref = new XRepository.Reference(source, target, findForeignKeyProperty);
         ref.foreignKey = foreignKey;
@@ -1186,8 +1312,8 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this.mapSingleReference = function(source, target, foreignKey, propertyName) {
         validateRequiredLibraries();
-        validateTypeArgument(source, 'source', 'mapSingleReference');
-        validateTypeArgument(target, 'target', 'mapSingleReference');
+        rememberType(source, 'source', 'mapSingleReference');
+        rememberType(target, 'target', 'mapSingleReference');
 
         var ref = new XRepository.Reference(source, target, findForeignKeyProperty);
         ref.foreignKey = foreignKey;
@@ -1198,11 +1324,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     this.mapTable = function(type, tableName) {
         validateRequiredLibraries();
-        validateTypeArgument(type, 'type', 'mapTable');
+        rememberType(type, 'type', 'mapTable');
         if (!String.is(tableName))
             throw new Error('Error in JSRepository.mapTable: tableName argument is missing or is not a String.');
 
-        getTableDefinition(tableName); // Validates passed tableName
+        if (this.isSynchronized)
+            getTableDefinition(tableName); // Validates passed tableName
 
         var tableNames = [];
         var baseType = XRepository.tools.getBase(type);
@@ -1237,6 +1364,20 @@ XRepository.JSRepository = function(path, isSynchronized) {
         });
         normalizedStrings.sort();
         return normalizedStrings;
+    } // end function
+
+
+    function rememberType(type, argumentName, methodName) {
+        if (!Function.is(type))
+            throw new Error('Error in JSRepository.' + methodName +
+                ': ' + argumentName + ' argument was not initialized or was not a function\n' +
+                XRepository.tools.formatObjectForError(argument, argumentName) + '.');
+
+        while (type != Object) {
+            if (cache.types.indexOf(type) == -1)
+                cache.types.push(type);
+            type = XRepository.tools.getBase(type);
+        } // end while
     } // end function
 
 
@@ -1462,14 +1603,6 @@ XRepository.JSRepository = function(path, isSynchronized) {
             } // end try-catch
             throw error;
         } // end if
-    } // end function
-
-
-    function validateTypeArgument(argument, argumentName, methodName) {
-        if (!Function.is(argument))
-            throw new Error('Error in JSRepository.' + methodName +
-                ': ' + argumentName + ' argument was not initialized or was not a function\n' +
-                XRepository.tools.formatObjectForError(argument, argumentName) + '.');
     } // end function
 
 } // end function
