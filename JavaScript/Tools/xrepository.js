@@ -425,15 +425,75 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
-    function convert(objects, type) {
+    function convertToLists(objects) {
+        var lists = [];
+        if (!objects.length)
+            return lists;
+
+        lists.push([]); // End the empty "delimiting" list.
+
+        // The columnsMap contains collections of column names sorted
+        // and JSONified as keys mapping to values representing their
+        // index in lists.  While iterating over objects, their
+        // properties are collected, sorted and stringified.  If the
+        // JSON value of the sorted columns collection is not in
+        // columnsMap, it is added as a key to the position in lists.
+        var columnsMap = {};
+        var columnsIndex = 0; // Tracks where next to add columns to lists.
         jQuery.each(objects, function(index, object) {
-            var newObject = new type();
-            jQuery.each(object, function(column, value) {
-                var mappedProperty = getMappedProperty(type, column);
-                newObject[mappedProperty] = value;
+            var columns = [];
+            jQuery.each(object, function(property, value) {
+                columns.push(property);
             });
-            objects[index] = newObject;
+            columns.sort();
+            var columnsJson = JSON.stringify(columns);
+
+            if (!columnsMap.hasOwnProperty(columnsJson)) {
+                columnsMap[columnsJson] = columnsIndex++;
+                lists.splice(columnsMap[columnsJson], 0, columns);
+            } // end if
+
+            var list = [];
+            list.push(columnsMap[columnsJson]);
+            jQuery.each(columns, function(index, column) {
+                list.push(object[column]);
+            });
+            lists.push(list);
         });
+
+        return lists;
+    } // end function
+
+
+    function convertToObjects(lists, type) {
+        var objects = [];
+
+        var isDoneWithColumns = false;
+        var columnsList = [];
+        jQuery.each(lists, function(index, list) {
+            if (isDoneWithColumns) {
+                if (!list.length)
+                    return;
+
+                var object = new type();
+                var columns;
+                jQuery.each(list, function(index, value) {
+                    if (columns) {
+                        var mappedProperty = getMappedProperty(type, columns[index - 1]);
+                        object[mappedProperty] = value;
+                    } else
+                        columns = columnsList[value];
+                });
+                objects.push(object);
+            } else {
+                if (list.length)
+                    columnsList.push(list);
+                else
+                    isDoneWithColumns = true;
+            } // end if
+        });
+
+        return objects;
     } // end function
 
 
@@ -630,10 +690,10 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
         return handleResponse(request, function() {
             validateResponse(request, 'toArray');
-            var objects = JSON.parse(request.responseText);
-            fixPropertyNames(objects);
-            fixDateStrings(objects);
-            convert(objects, cursor.type);
+            var lists = JSON.parse(request.responseText);
+            fixPropertyNames(lists);
+            fixDateStrings(lists);
+            var objects = convertToObjects(lists, cursor.type);
 
             var joinObjects = fetchStringJoins(objects, cursor);
             if (joinObjects && joinObjects.promises) {
@@ -854,39 +914,40 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
-    function fixDateStrings(objects) {
-        if (!Array.is(objects))
-            objects = [objects];
-
-        var self = this;
-        jQuery.each(objects, function(index, obj) {
-            jQuery.each(obj, function(property, value) {
+    function fixDateStrings(lists) {
+        jQuery.each(lists, function(index, list) {
+            jQuery.each(list, function(index, value) {
                 if (String.is(value)) {
                     var date = XRepository.tools.convertStringToDate(value);
                     if (date)
-                        obj[property] = date;
+                        list[index] = date;
                 } // end if
             });
         });
     } // end function
 
 
-    function fixPropertyNames(objects) {
-        // Extract the name from the reader's schema.  Fields with
+    function fixPropertyNames(lists) {
+        // Remove the name from the reader's schema.  Fields with
         // the same name in multiple tables selected (usually the
         // primary key) will be preceded by the table name and a ".".
         // For instance, if Employee extends from Person, the names
         // "Person.Id" and "Employee.Id" will be column names.
         // Strip the preceding table name and ".".
-        jQuery.each(objects, function(index, obj) {
-            jQuery.each(obj, function(property) {
-                var index = property.lastIndexOf('.');
-                if (index == -1)
+        jQuery.each(lists, function(index, list) {
+            // An empty list inside of array delimits the columns
+            // from actual values.  When encountered, then processing
+            // is complete (names to be fixed are in columns only).
+            if (!list.length)
+                return false;
+
+            jQuery.each(list, function(index, property) {
+                var dotIndex = property.lastIndexOf('.');
+                if (dotIndex == -1)
                     return;
 
-                var newProperty = property.substring(index + 1);
-                obj[newProperty] = obj[property];
-                delete obj[property];
+                var newProperty = property.substring(dotIndex + 1);
+                list[index] = newProperty;
             });
         });
     } // end function
@@ -1406,11 +1467,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
         applyTableNames(objects);
         objects = removeExtraneousProperties(objects);
         fixDateObjects(objects);
+        var lists = convertToLists(objects);
         var request = jQuery.ajax(repo.path.root + '/' + repo.path.remove, {
             async: !repo.isSynchronized,
             cache: false,
             method: 'POST',
-            data: { data: JSON.stringify(objects) }
+            data: { data: JSON.stringify(lists) }
         });
         return handleResponse(request, function() {
             validateResponse(request, 'remove');
@@ -1481,11 +1543,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
         applyTableNames(objects);
         var cleanObjects = removeExtraneousProperties(objects);
         fixDateObjects(cleanObjects);
+        var lists = convertToLists(cleanObjects);
         var request = jQuery.ajax(repo.path.root + '/' + repo.path.save, {
             async: !repo.isSynchronized,
             cache: false,
             method: 'POST',
-            data: { data: JSON.stringify(cleanObjects) }
+            data: { data: JSON.stringify(lists) }
         });
         return handleResponse(request, function() {
             validateResponse(request, 'save');
