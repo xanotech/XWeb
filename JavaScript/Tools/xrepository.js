@@ -480,7 +480,8 @@ XRepository.JSRepository = function(path, isSynchronized) {
                 jQuery.each(list, function(index, value) {
                     if (columns) {
                         var mappedProperty = getMappedProperty(type, columns[index - 1]);
-                        object[mappedProperty] = value;
+                        if (mappedProperty)
+                            object[mappedProperty] = value;
                     } else
                         columns = columnsList[value];
                 });
@@ -535,12 +536,17 @@ XRepository.JSRepository = function(path, isSynchronized) {
         if (XRepository.tools.getProperties(propertyMap).length)
             return obj;
 
+        // Set the object's "_tableNames" and for each table, get the full list
+        // of columns.  For each column get the column's corresponding property.
+        // If getMappedProperty does not return null (which it will if that column
+        // has been ignored), add that property to the object with null value.
         obj._tableNames = tableNames;
         jQuery.each(tableNames, function(index, tableName) {
             var columns = getColumns(tableName);
             jQuery.each(columns, function(index, column) {
                 var property = getMappedProperty(type, column);
-                obj[property] = null;
+                if (property)
+                    obj[property] = null;
             });
         });
         return obj;
@@ -1022,6 +1028,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
+    // Returns the column mapped to the propertyName passed.
     function getMappedColumn(type, propertyName) {
         while (type != Object) {
             var columnMap = cache.columnMap[type.getName()];
@@ -1035,7 +1042,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
                 });
                 if (mappedColumn)
                     return mappedColumn;
-            }
+            } // end if
             type = XRepository.tools.getBase(type);
         } // end while
         return propertyName;
@@ -1045,18 +1052,15 @@ XRepository.JSRepository = function(path, isSynchronized) {
     function getMappedProperty(type, columnName) {
         var column = columnName.toUpperCase();
 
-        // Get propertyMap now since I'm going to jack with type
+        // Get propertyMap now since we're going to jack with type
         var propertyMap = getPropertyMap(type);
 
         // Scan through references looking for a mapping
         // for this column and return immediately if found.
         while (type != Object) {
             var columnMap = cache.columnMap[type.getName()];
-            if (columnMap) {
-                var propertyName = columnMap[column];
-                if (propertyName)
-                    return propertyName;
-            } // end if
+            if (columnMap && columnMap.hasOwnProperty(column))
+                return columnMap[column];
             type = XRepository.tools.getBase(type);
         } // end while
 
@@ -1086,6 +1090,9 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
+    // Returns an object map of the properties of of the type where the keys
+    // are the upper-case value of the property and the values are the property
+    // names.
     function getPropertyMap(type) {
         var typeName = type.getName();
         if (cache.propertyMap[typeName])
@@ -1179,6 +1186,22 @@ XRepository.JSRepository = function(path, isSynchronized) {
             });
             return deferred.promise();
         } // end if-else
+    } // end function
+
+
+    this.ignore = function(type, columnName) {
+        validateRequiredLibraries();
+        rememberType(type, 'type', 'ignore');
+        if (!String.is(columnName))
+            throw new Error('Error in JSRepository.ignore: columnName argument is missing or is not a String.');
+
+        if (!isValidColumn(type, columnName))
+            throw new Error('The columnName "' + columnName + '" does not exist.');
+
+        var typeName = type.getName();
+        columnName = columnName.toUpperCase();
+        cache.columnMap[typeName] = cache.columnMap[typeName] || {};
+        cache.columnMap[typeName][columnName] = null; // Use null to designate a column to be ignored
     } // end function
 
 
@@ -1297,7 +1320,6 @@ XRepository.JSRepository = function(path, isSynchronized) {
         // is a Function / "class" and when constructed it contains properties).
         var propertyMap = getPropertyMap(cursor.type);
         if (XRepository.tools.getProperties(propertyMap).length) {
-            var columns = [];
             var tableNames = getTableNames(cursor.type);
             var allColumns = {}; // Map of column names keyed by their upper-case value
             jQuery.each(tableNames, function(index, tableName) {
@@ -1306,20 +1328,32 @@ XRepository.JSRepository = function(path, isSynchronized) {
                 });
             });
 
+            // Iterates over all (upper-case) property names in propertyMap
+            // getting the mapped column for the property adding it to
+            // cursorData.columns.  Also, calls getMappedProperty for the
+            // column because getMappedColumn will return the property value
+            // itself if it is not mapped to a column.  The call to
+            // getMappedProperty will return null if it was ignored.
+            cursorData.columns = [];
             jQuery.each(propertyMap, function(propertyUpperCase, property) {
                 var column = getMappedColumn(cursor.type, property);
+                if (getMappedProperty(cursor.type, column) == null)
+                    return;
+
                 column = allColumns[column.toUpperCase()];
                 if (column)
-                    columns.push(column);
+                    cursorData.columns.push(column);
             });
-            cursorData.columns = columns;
         } // end if
 
-        // Change sort columns to mapped database columns
+        // Change sort columns to mapped database columns.  Like above,
+        // uses getMappedProperty to determine if the column is ignored.
         var sort = {};
         if (cursorData.sort)
             jQuery.each(cursorData.sort, function(property, value) {
-                sort[getMappedColumn(cursor.type, property)] = value;
+                var column = getMappedColumn(cursor.type, property);
+                if (getMappedProperty(cursor.type, column) != null)
+                    sort[column] = value;
             });
         cursorData.sort = sort;
 
@@ -1600,6 +1634,8 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
         jQuery.each(criteria, function(index, criterion) {
             criterion.name = getMappedColumn(type, criterion.name);
+            if (!getMappedProperty(type, criterion.name))
+                throw new Error('The column "' + criterion.name + '" has been ignored.');
         });
 
         return criteria;
@@ -1767,6 +1803,7 @@ XRepository.tools.getBase = function(type) {
 
 
 
+// Returns all the property names of the passed object in an array.
 XRepository.tools.getProperties = function(obj) {
     var properties = [];
     jQuery.each(obj, function(property) {
