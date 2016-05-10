@@ -1,7 +1,7 @@
 // xrepository JavaScript Library v0.7
 // http://xrepository.com/
 //
-// Copyright 2015 Xanotech LLC
+// Copyright 2016 Xanotech LLC
 // Released under the MIT license
 // http://xrepository.com/#!License.html
 
