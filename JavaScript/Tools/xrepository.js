@@ -499,7 +499,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.count = function(type, criteria) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(type, 'type', 'count');
         criteria = validateCriteria(type, criteria, 'count');
         var cursor = createCursor(type, criteria);
@@ -527,7 +527,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     // method is a substitute for new with the difference being that properties
     // defined by the server will be present (although initialized to null).
     this.create = function(type) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(type, 'type', 'create');
         var tableNames = getTableNames(type);
         var obj = new type();
@@ -773,7 +773,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.find = function(type, criteria) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(type, 'type', 'find');
         criteria = validateCriteria(type, criteria, 'find');
         return createCursor(type, criteria);
@@ -806,7 +806,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.findOne = function(type, criteria) {
-        validateRequiredLibraries();
+        validateXTools();
         var result = repo.find(type, criteria).limit(1).toArray();
         if (Object.isPromise(result)) {
             var deferred = jQuery.Deferred();
@@ -903,18 +903,20 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
-    function fixDateObjects(objects) {
+    // JSON stringifies all date values in objects to ISO 8601 format
+    // without modifying the underlying date / time components
+    // regardless of timezone.  This is necessary because JSON.stringify
+    // monkeys with the actual date values based on the timezone which
+    // doesn't translate too well to databases (since they don't have
+    // timezones components in their date).
+    function stringifyDates(objects) {
         if (!Array.is(objects))
             objects = [objects];
 
         jQuery.each(objects, function(index, obj) {
             jQuery.each(obj, function(property, value) {
-                if (!Date.is(value))
-                    return;
-
-                var m = moment.utc([value.getFullYear(), value.getMonth(), value.getDate(),
-                    value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds()]);
-                obj[property] = m.toDate();
+                if (Date.is(value))
+                    obj[property] = value.format('yyyy-MM-ddThh:mm:ssZ');
             });
         });
     } // end function
@@ -1190,7 +1192,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.ignore = function(type, columnName) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(type, 'type', 'ignore');
         if (!String.is(columnName))
             throw new Error('Error in JSRepository.ignore: columnName argument is missing or is not a String.');
@@ -1375,7 +1377,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.mapColumn = function(type, propertyName, columnName) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(type, 'type', 'mapColumn');
         if (!String.is(propertyName))
             throw new Error('Error in JSRepository.mapColumn: propertyName argument is missing or is not a String.');
@@ -1393,7 +1395,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.mapMultipleReference = function(source, target, foreignKey, propertyName) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(source, 'source', 'mapMultipleReference');
         rememberType(target, 'target', 'mapMultipleReference');
 
@@ -1406,7 +1408,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.mapSingleReference = function(source, target, foreignKey, propertyName) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(source, 'source', 'mapSingleReference');
         rememberType(target, 'target', 'mapSingleReference');
 
@@ -1418,7 +1420,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.mapTable = function(type, tableName) {
-        validateRequiredLibraries();
+        validateXTools();
         rememberType(type, 'type', 'mapTable');
         if (!String.is(tableName))
             throw new Error('Error in JSRepository.mapTable: tableName argument is missing or is not a String.');
@@ -1477,7 +1479,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.remove = function(objects) {
-        validateRequiredLibraries();
+        validateXTools();
         if (Object.isBasic(objects))
             throw new Error('Error in JSRepository.remove: objects argument cannot be a basic type ' +
                 'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
@@ -1500,7 +1502,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
         validateEntityArray(objects, 'remove');
         applyTableNames(objects);
         objects = removeExtraneousProperties(objects);
-        fixDateObjects(objects);
+        stringifyDates(objects);
         var lists = convertToLists(objects);
         var request = jQuery.ajax(repo.path.root + '/' + repo.path.remove, {
             async: !repo.isSynchronized,
@@ -1553,7 +1555,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
 
     this.save = function(objects) {
-        validateRequiredLibraries();
+        validateXTools();
         if (Object.isBasic(objects))
             throw new Error('Error in JSRepository.save: objects argument cannot be a basic type ' +
                 'but must instead be an entity object, an array of entity objects, or a Cursor\n' +
@@ -1576,7 +1578,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
         validateEntityArray(objects, 'save');
         applyTableNames(objects);
         var cleanObjects = removeExtraneousProperties(objects);
-        fixDateObjects(cleanObjects);
+        stringifyDates(cleanObjects);
         var lists = convertToLists(cleanObjects);
         var request = jQuery.ajax(repo.path.root + '/' + repo.path.save, {
             async: !repo.isSynchronized,
@@ -1666,13 +1668,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
     } // end function
 
 
-    function validateRequiredLibraries() {
-        if (typeof moment != 'function')
-            throw new Error('Error in JSRepository: moment.js does not appear to be referenced.  ' +
-                'xrepository.js requires moment.js.  Make sure it is referenced ' +
-                'before attempting to invoke any methods of JSRepository.');
-
-        // Validate XTools
+    function validateXTools() {
         if (!XRepository.JSRepository.getName)
             throw new Error('Error in JSRepository: xtools.js does not appear to be referenced.  ' +
                 'xrepository.js requires xtools.js.  Make sure it is referenced ' +
@@ -1736,20 +1732,9 @@ XRepository.tools = {}
 
 
 XRepository.tools.convertStringToDate = function(string) {
-    // Look for ISO 8601 dates (2013-10-28T16:38:30Z) and "quasi" ISO 8601 dates (2013-10-28 16:38:30Z).
-    if (string.length == 20 && string[4] == '-' && string[7] == '-' &&
-        string[13] == ':' && string[16] == ':' && string[19] == 'Z') {
-        var m = moment.utc(string);
-        if (m.isValid())
-            return new Date(m.year(), m.month(), m.date(),
-                m.hour(), m.minute(), m.second(), m.millisecond());
-
-        // Look for funky Microsoft JSON dates (stupid Microsoft): /Date(946702800000)/
-    } else if (string.startsWith('/Date(') && string.endsWith(')/') &&
-        !isNaN(string.substring(6, string.length - 2))) {
-        var time = parseInt(string.substring(6));
-        return new Date(time);
-    } // end if-else
+    var isoDate = XRepository.tools.parseIsoDate(string);
+    var msDate = XRepository.tools.parseMsDate(string);
+    return isoDate || msDate;
 } // end function
 
 
@@ -1810,6 +1795,38 @@ XRepository.tools.getProperties = function(obj) {
         properties.push(property);
     });
     return properties;
+} // end function
+
+
+
+XRepository.tools.parseIsoDate = function(string) {
+    // Look for ISO 8601 dates (2013-10-28T16:38:30Z) and "quasi" ISO 8601 dates (2013-10-28 16:38:30Z).
+    if (!(string.length == 20 && string[4] == '-' && string[7] == '-' &&
+        string[13] == ':' && string[16] == ':' && string[19] == 'Z'))
+        return;
+
+    var year = parseInt(string.substr(0, 4));
+    var month = parseInt(string.substr(5, 2));
+    var day = parseInt(string.substr(8, 2));
+    var hour = parseInt(string.substr(11, 2));
+    var min = parseInt(string.substr(14, 2));
+    var sec = parseInt(string.substr(17, 2));
+    if (isNaN(year) || isNaN(month) || isNaN(day) ||
+        isNaN(hour) || isNaN(min) || isNaN(sec))
+        return;
+
+    return new Date(year, month - 1, day, hour, min, sec);
+} // end function
+
+
+
+XRepository.tools.parseMsDate = function(string) {
+    if (!string.startsWith('/Date(') || !string.endsWith(')/') ||
+        isNaN(string.substring(6, string.length - 2)))
+        return;
+
+    var time = parseInt(string.substring(6));
+    return new Date(time);
 } // end function
 
 
