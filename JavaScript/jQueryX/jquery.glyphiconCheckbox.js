@@ -2,78 +2,75 @@
 
 
 
-// Turns an A tag into a glyphicon checkbox.
+// Turns regular checkboxes (input[type='checkbox']) into a glyphicon checkbox.
 jQuery.fn.glyphiconCheckbox = function() {
-    var classAttribute = '';
-    var html = ' &nbsp; &nbsp; ';
+    var gcFunc = jQuery.fn.glyphiconCheckbox; // Shorthand reference to this plugin function
+    gcFunc.checkboxes = gcFunc.checkboxes || []; // A list of glyphiconified checkboxes
 
-    if (arguments.length == 1)
-        html = arguments[0];
-    if (arguments.length > 1) {
-        classAttribute = arguments[0];
-        html = arguments[1];
-    } // end if
+    this.each(function(index, checkbox) {
+        var $checkbox = jQuery(checkbox);
 
-    html = '<button' + classAttribute + '>' + html + '</button>';
-
-    $selection.each(function(index, button) {
-        var $button = jQuery(button);
-        if (!$button.is("button"))
+        // If the element is not a checkbox or already exists in
+        // gcFunc.checkboxes, then "return" (which moves to the next checkbox)
+        if (!$checkbox.is("input[type='checkbox']") ||
+            gcFunc.checkboxes.indexOf(checkbox) > -1)
             return;
 
-        // If onclick exists, get the definition and remove it from button.
-        var onclick;
-        if (button.hasAttribute('onclick')) {
-            onclick = button.getAttribute('onclick');
-            button.removeAttribute('onclick');
-        } // end if
-
-        // Gather up all click handlers attached to button into clickHandlers
-        // and remove them from button.
-        var clickHandlers = [];
-        var events = jQuery._data(button, 'events');
-        if (events && events.click)
-            jQuery.each(events.click, function(index, eventObj) {
-                clickHandlers.push(eventObj.handler);
-                $button.unbind('click', eventObj.handler);
+        $checkbox.hide();
+        $checkbox.after('<span class="glyphicon ' +
+            gcFunc.getGlyphiconClass(checkbox.checked) + '"></span>');
+        if (!$checkbox.parent().is("label"))
+            $checkbox.next().click(function() {
+                $checkbox.click();
+                gcFunc.syncGlyphicon(checkbox);
             });
-
-        // Setup the popover functionality.  Trigger needs to be manual
-        // because along with whatever events are attached to button,
-        // safe button needs to close the popover and bootstrap has
-        // made it so you either let bootstrap control everything
-        // or you do everything yourself.  If you hide the popover
-        // manually without setting the trigger to manual, weirdness
-        // happens (which is why there is popover('show' / 'hide')
-        // code in the $button click handler).
-        $button.popover({
-            content: html,
-            html: true,
-            trigger: 'manual'
-        }).click(function() {
-            // If aria-describedby is present, the popover is visible
-            // and needs to be hidden.  If it isn't present, the popover
-            // isn't visible and needs to be shown.
-            if ($button.is("[aria-describedby]"))
-                $button.popover('hide');
-            else
-                $button.popover('show');
-
-            var $safeButton = $button.next().find("button");
-
-            // Apply onclick attribute if present.
-            if (onclick)
-                $safeButton.attr('onclick', onclick);
-
-            // Apply clickHandlers if any.
-            if (clickHandlers.length)
-                jQuery.each(clickHandlers, function(index, handler) {
-                    $safeButton.click(handler);
-                });
-
-            $safeButton.click(function() { $button.popover('hide'); });
-        });
+        $checkbox.change(function() {
+            gcFunc.syncGlyphicon(checkbox);
+        })
+        gcFunc.checkboxes.push(checkbox);
     });
 
+    if (!gcFunc.interval)
+        gcFunc.interval = window.setInterval(gcFunc.monitorCheckboxes, 200);
+
     return this;
+} // end function
+
+
+
+jQuery.fn.glyphiconCheckbox.getGlyphiconClass = function(checked) {
+    if (checked)
+        return 'glyphicon-check';
+    else
+        return 'glyphicon-unchecked';
+} // end function
+
+
+
+jQuery.fn.glyphiconCheckbox.monitorCheckboxes = function() {
+    var gcFunc = jQuery.fn.glyphiconCheckbox; // Shorthand reference to this plugin function
+
+    // Process the checkboxes in reverse order
+    // (because they might) need to be removed.
+    for (var c = gcFunc.checkboxes.length - 1; c >= 0; c--) {
+        var checkbox = gcFunc.checkboxes[c];
+        if (document.body.contains(checkbox))
+            gcFunc.syncGlyphicon(checkbox);
+        else
+            gcFunc.checkboxes.splice(c, 1);
+    } // end for
+} // end function
+
+
+
+jQuery.fn.glyphiconCheckbox.syncGlyphicon = function(checkbox) {
+    var gcFunc = jQuery.fn.glyphiconCheckbox; // Shorthand reference to this plugin function
+
+    var $glyphicon = $(checkbox).next();
+    var classNeeded = gcFunc.getGlyphiconClass(checkbox.checked);
+    var classForbidden = gcFunc.getGlyphiconClass(!checkbox.checked);
+    if (!$glyphicon.hasClass(classNeeded))
+        $glyphicon.addClass(classNeeded);
+    if ($glyphicon.hasClass(classForbidden))
+        $glyphicon.removeClass(classForbidden);
 } // end function
