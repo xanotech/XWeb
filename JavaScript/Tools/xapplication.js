@@ -13,24 +13,24 @@ function XApplication() {
 
 
 
-    application.alert = function(html, alertClass, fadeAfter) {
+    this.alert = function(html, alertClass, fadeAfter) {
         if (typeof hashNavigator == 'undefined') {
             // Not using hashNavigator, just use regular alert.
             html = html.split('<br>').join('\n');
             html = html.split('<BR>').join('\n');
             html = html.replace(/(<([^>]+)>)/ig, '');
             alert(html);
-        } if (typeof jQuery.fn.emulateTransitionEnd == 'function')
-            application.alert.bootstrap3(html, alertClass, fadeAfter);
+        } else if (typeof jQuery.fn.emulateTransitionEnd == 'function')
+            alertBootstrap3(html, alertClass, fadeAfter);
         else if (typeof jQuery.fn.popover == 'function')
-            application.alert.bootstrap2(html, alertClass, fadeAfter);
+            alertBootstrap2(html, alertClass, fadeAfter);
         else
-            application.alert.custom(html, alertClass, fadeAfter);
+            alertCustom(html, alertClass, fadeAfter);
     } // end function
 
 
 
-    application.alert.bootstrap2 = function(html, alertClass, fadeAfter) {
+    function alertBootstrap2(html, alertClass, fadeAfter) {
         if (['error', 'info', 'success'].indexOf(alertClass) > -1)
             alertClass = 'alert-' + alertClass;
         var glyphiconMap = {
@@ -48,12 +48,12 @@ function XApplication() {
         alertHtml += html + '</div>';
         var $alert = jQuery(alertHtml).prependTo('#' + hashNavigator.contentId);
         if (fadeAfter && fadeAfter.constructor == Number)
-            $alert.delay(fadeAfter).fadeOut(1000);
+            $alert.delay(fadeAfter).fadeOut(1000, function() { $alert.remove(); });
     } // end function
 
 
 
-    application.alert.bootstrap3 = function(html, alertClass, fadeAfter) {
+    function alertBootstrap3(html, alertClass, fadeAfter) {
         if (!alertClass)
             alertClass = 'info';
         if (['danger', 'info', 'success', 'warning'].indexOf(alertClass) > -1)
@@ -72,12 +72,12 @@ function XApplication() {
         alertHtml += html + '</div>';
         var $alert = jQuery(alertHtml).prependTo('#' + hashNavigator.contentId);
         if (fadeAfter && fadeAfter.constructor == Number)
-            $alert.delay(fadeAfter).fadeOut(1000);
+            $alert.delay(fadeAfter).fadeOut(1000, function() { $alert.remove(); });
     } // end function
 
 
 
-    application.alert.custom = function(html, alertClass, fadeAfter) {
+    function alertCustom(html, alertClass, fadeAfter) {
         alertClass = alertClass || 'alert';
         var alertHtml = '<div class="' + alertClass + '">';
         alertHtml += '<span style="float: right;">';
@@ -86,12 +86,12 @@ function XApplication() {
         alertHtml += html + '</div>';
         var $alert = jQuery(alertHtml).prependTo('#' + hashNavigator.contentId);
         if (fadeAfter && fadeAfter.constructor == Number)
-            $alert.delay(fadeAfter).fadeOut(1000);
+            $alert.delay(fadeAfter).fadeOut(1000, function() { $alert.remove(); });
     } // end function
 
 
 
-    application.defaultInit = function() {
+    this.defaultInit = function() {
         window.onerror = application.handleJavaScriptError;
 
         if (typeof hashNavigator != 'undefined')
@@ -103,7 +103,7 @@ function XApplication() {
 
 
 
-    application.dispatchPageinit = function(hash) {
+    function dispatchPageinit(hash) {
         var $window = jQuery(window);
 
         // If onpageinit is set and hasn't already been attached, register it
@@ -121,12 +121,12 @@ function XApplication() {
 
 
 
-    application.handleAjaxCompletion = function(event, request, settings, error) {
+    this.handleAjaxCompletion = function(event, request, settings, error) {
     } // end function
 
 
 
-    application.handleAjaxError = function(event, request, settings, error) {
+    this.handleAjaxError = function(event, request, settings, error) {
         if (request.status >= 200 && request.status < 300)
             return;
 
@@ -145,7 +145,7 @@ function XApplication() {
 
 
 
-    application.handleError = function(message, stack) {
+    this.handleError = function(message, stack) {
         message = (message || '').split('\n').join('<br>');
         stack = (stack || '').split('\n').join('<br>');
         if (stack)
@@ -156,7 +156,7 @@ function XApplication() {
 
 
 
-    application.handleJavaScriptError = function(message, file, line, column, errorObj) {
+    this.handleJavaScriptError = function(message, file, line, column, errorObj) {
         if (message.indexOf('Uncaught ') == 0)
             message = message.substring(9);
 
@@ -181,12 +181,12 @@ function XApplication() {
 
 
 
-    application.init = function() {
+    this.init = function() {
     } // end function
 
 
 
-    application.initPage = function() {
+    this.initPage = function() {
         if (typeof hashNavigator == 'undefined')
             return;
 
@@ -228,7 +228,7 @@ function XApplication() {
         function callInit() {
             if (initFunc)
                 initFunc();
-            application.dispatchPageinit(hash);
+            dispatchPageinit(hash);
         } // end function
 
         // Check to see if jQuery.include is present.  If it is, call it passing
@@ -245,12 +245,12 @@ function XApplication() {
     // Set this event handler to be called after the page is loaded and initialized.
     // By default, it does nothing.  As an alternative, add handlers listening
     // for the "pageinit" event via jQuery.on, addEventListener, etc.
-    application.onpageinit = null;
+    this.onpageinit = null;
 
 
 
     XApplication.applications = XApplication.applications || [];
-    XApplication.applications.push(application);
+    XApplication.applications.push(this);
 } // end function
 
 
