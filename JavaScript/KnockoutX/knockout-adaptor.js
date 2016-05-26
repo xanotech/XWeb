@@ -16,6 +16,9 @@ ko.observableAdaptor = function(object, property) {
 
 
 ko.adapt = function(objects) {
+    if (!objects)
+        return;
+
     if (!Array.isArray(objects))
         objects = [objects];
 
