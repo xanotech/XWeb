@@ -8,6 +8,7 @@
 .indent { margin-left: 50px; }
 .inline { display: inline; }
 .left { text-align: left; }
+.lowercase { text-transform: lowercase; }
 .middle { vertical-align: middle; }
 .padding-none { padding: 0px; }
 .padding-side { padding-left: 4px; padding-right: 4px; }
@@ -16,6 +17,7 @@
 .shaded { background-color: #AAAAAA; }
 .shaded-light { background-color: #EEEEEE; }
 .top { vertical-align: top; }
+.uppercase { text-transform: uppercase; }
 .wide { width: 100%; }
 
 div.padded, table.padded th, table.padded td { padding: 2px 4px 2px 4px; }
