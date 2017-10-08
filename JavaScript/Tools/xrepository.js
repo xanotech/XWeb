@@ -1,7 +1,7 @@
-// xrepository JavaScript Library v0.7
+// xrepository JavaScript Library v0.7.1
 // http://xrepository.com/
 //
-// Copyright 2016 Xanotech LLC
+// Copyright 2017 Xanotech LLC
 // Released under the MIT license
 // http://xrepository.com/#!License.html
 
@@ -320,11 +320,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
         var selfProperty = this.isSynchronized ? 'sync' : 'async';
         var altProperty = !this.isSynchronized ? 'sync' : 'async';
 
-        this[selfProperty] = this;
         XRepository.JSRepository.isRecursive = true;
-        this[altProperty] = new XRepository.JSRepository(path, !this.isSynchronized, cache);
+        var alt = new XRepository.JSRepository(path, !this.isSynchronized, cache);
+        alt.path = this.path;
+        this[altProperty] = alt[altProperty] = alt;
+        this[selfProperty] = alt[selfProperty] = this;
         delete XRepository.JSRepository.isRecursive;
-        this[altProperty].path = this.path;
     } // end if
 
 
@@ -1273,7 +1274,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
                         if (Object.isPromise(value))
                             requests.push(value);
                     });
-                    jQuery.when.apply(jQuery.requests).always(mainDeferred.resolve);
+                    jQuery.when.apply(jQuery, requests).always(mainDeferred.resolve);
                 });
             } // end function
 
