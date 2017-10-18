@@ -204,31 +204,39 @@ function XApplication() {
         if (hash.toUpperCase().endsWith('.HTML'))
             application.page = XApplication.createPageObject(hash);
 
-        // If page.init exists, then set initFunc to reference it.  Or if
+        // If page.init exists, then set pageInit to reference it.  Or if
         // page.init isn't defined look for a "free floating" init and set
-        // initFunc to that.
-        var initFunc;
+        // pageInit to that.
+        var pageInit;
         if (application.page && typeof application.page.init == 'function')
-            initFunc = application.page.init;
+            pageInit = application.page.init;
         else if (typeof init == 'function') {
             // Once an init method is loaded by a page, it does not go away
             // when another page is loaded.  Since we only want to call
             // init with its page, the following logic associates
             // the init function with the hash that spawned it.
             // and then checks the init's hash with the current hash
-            // setting initFunc (which is what is called) only if the
+            // setting pageInit (which is what is called) only if the
             // hash values match.
             init.hash = init.hash || hash;
             if (init.hash == hash)
-                initFunc = init;
+                pageInit = init;
         } // end if-else
 
-        // Define callInit, which calls initFunc (if it is definied)
-        // and then dispatches the pageinit event.
+        // Define callInit, which calls pageInit (if it is definied)
+        // and then dispatches the pageinit event.  It does this
+        // as part of the current thread or, if initPromise is definited,
+        // after initPromise finishes.
         function callInit() {
-            if (initFunc)
-                initFunc();
-            dispatchPageinit(hash);
+            var initAndDispatch = function() {
+                if (pageInit)
+                    pageInit();
+                dispatchPageinit(hash);
+            };
+            if (application.initPromise)
+                application.initPromise.done(initAndDispatch);
+            else
+                initAndDispatch();
         } // end function
 
         // Check to see if jQuery.include is present.  If it is, call it passing
@@ -345,6 +353,8 @@ XApplication.wrap = function(func) {
 jQuery(function() {
     jQuery.each(XApplication.applications, function(index, app) {
         app.defaultInit();
-        app.init();
+        var initResult = app.init();
+        if (Object.isPromise(initResult))
+            app.initPromise = initResult;
     });
 });

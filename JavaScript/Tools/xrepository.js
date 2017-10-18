@@ -1,4 +1,4 @@
-// xrepository JavaScript Library v0.7.1
+// xrepository JavaScript Library v0.7.2
 // http://xrepository.com/
 //
 // Copyright 2017 Xanotech LLC
@@ -651,7 +651,7 @@ XRepository.JSRepository = function(path, isSynchronized) {
 
     function executeAsyncJoin(objects, deferreds, index) {
         // Get the deferred to be executed from deferreds.  If undefined,
-        // there must not be any more; return cause the job is done.
+        // there must not be any more; return because the job is done.
         var deferred = deferreds[index];
         if (!deferred)
             return;
@@ -660,9 +660,12 @@ XRepository.JSRepository = function(path, isSynchronized) {
         var property = properties.pop();
         var sourceObjects = drillDown(objects, properties);
 
+        // If there are no sourceObects resolve the current deferred
+        // and queue another one to pull the next referenced set of objects.
         if (!sourceObjects || !sourceObjects.length) {
             deferred.resolve();
             executeAsyncJoin(objects, deferreds, index + 1);
+            return;
         } // end if
 
         var reference = getJoinReference(sourceObjects[0].constructor, property);
