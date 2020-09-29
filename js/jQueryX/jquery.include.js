@@ -1,6 +1,6 @@
-// jquery.include jQuery Plugin v1.0
+// jquery.include jQuery Plugin v1.0.1
 //
-// Copyright 2015 Xanotech LLC
+// Copyright 2019 Xanotech LLC
 // Released under the MIT license
 // http://opensource.org/licenses/MIT
 
@@ -14,6 +14,10 @@
 // tags with data-include attributes will also be processed.  After all
 // includes are complete, the callback (which is optional) will be executed.
 jQuery.fn.include = function(callback) {
+    // Initialize a cacheBuster (a string that will be appened to the URL to ensure
+    // the browser makes an actual request the first time a page is loaded.
+    jQuery.fn.include.cacheBuster = jQuery.fn.include.cacheBuster || new Date().getTime();
+
     if (callback && typeof callback != 'function')
         throw new Error('Error in include: callback argument is not a function');
 
@@ -31,6 +35,11 @@ jQuery.fn.include = function(callback) {
             callback._dataIncludeElements.push($this);
 
         var url = $this.attr('data-include');
+
+        // Append the cacheBuster to the end of the URL separated by '?'
+        // if there isn't a '?' or '&' if there is one.
+        url += (url.indexOf('?') == -1 ? '?' : '&') +
+            jQuery.fn.include.cacheBuster;
         $this.load(url, null, function(response, status, request) {
             var $this = $(this);
 
