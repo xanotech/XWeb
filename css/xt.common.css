@@ -1,3 +1,6 @@
+@media screen and (max-width: 600px) { .desktop { display: none; } }
+@media screen and (min-width: 601px) { .mobile { display: none; } }
+
 .border { border: solid 1px #666666; }
 .border-light { border: solid 1px #AAAAAA; }
 .bottom { vertical-align: bottom; }
@@ -33,6 +36,6 @@ table {
 td, th {
     padding: 0px;
     margin: 0px;
-    vertical-align: top;
     text-align: left;
+    vertical-align: top;
 }
