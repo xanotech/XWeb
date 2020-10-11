@@ -27,6 +27,8 @@ body > header > nav a {
     top: 13px;
 }
 body > header > nav a:hover { color: #FFFFFF; }
+body > header > nav.mobile { height: auto; line-height: 30px; }
+body > header > nav.mobile a { position: inherit; }
 
 body > main {
     margin: 0 auto;
@@ -42,10 +44,10 @@ body > main > section {
     padding-top: 25px;
     padding-bottom: 25px;
 }
-body > main > section h1,
-body > main > section h2,
-body > main > section h3,
-body > main > section h4 { margin-top: 0; }
+body > main > section h1:first-child,
+body > main > section h2:first-child,
+body > main > section h3:first-child,
+body > main > section h4:first-child { margin-top: 0; }
 
 body > footer {
     background-color: #DDDDEE;
