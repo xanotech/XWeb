@@ -1,4 +1,4 @@
-// hashNavigator JavaScript Library v1.2
+// hashNavigator JavaScript Library v1.3
 //
 // Copyright 2015 Xanotech LLC
 // Released under the MIT license
@@ -20,11 +20,6 @@ var hashNavigator = {
     // Specifies the hash value to be requested if the hash is ever empty or missing.
     // By default, it is "Home.html".
     defaultHash: 'Home.html',
-
-    // Sets whether caching is enabled when making requests to load a page.
-    // The hashNavigator itself does no caching but if isCachingEnabled is set
-    // to false, hashNavigator will attempt to bypass any caching that may be in effect.
-    isCachingEnabled: true,
 
     // Set this event handler to be called after the page successfully loads.
     // By default, it does nothing.  As an alternative, add handlers listening
@@ -84,7 +79,15 @@ hashNavigator.getHash = function() {
 // the tag specified by contentId.  It then dispatches a "hashpageload"
 // event on the contentId element.
 hashNavigator.loadHashPage = function(hash) {
-    jQuery.ajax({ url: hash, cache: this.isCachingEnabled }).done(function(data) {
+    hash = hash || hash.toString(); // Set hash to string value if it has a value
+
+    // If hash is an html file, add a query string value of the current date to prevent caching.
+    if (hash && hash.toLowerCase().substring(hash.length - 5) == '.html') {
+        hashNavigator.loadHashPage.asOf = hashNavigator.loadHashPage.asOf || new Date().getTime();
+        hash += '?' + hashNavigator.loadHashPage.asOf;
+    }
+
+    jQuery.ajax({url: hash}).done(function(data) {
         jQuery('#' + hashNavigator.contentId).html(data);
     }).fail(function(request) {
         var text = request.responseText;
@@ -104,8 +107,8 @@ hashNavigator.loadHashPage = function(hash) {
         if (typeof data.done == 'function' &&
             typeof data.promise == 'function') {
             var temp = data; // request (disguised as data) moved to temp
-            var data = request; // data (disguised as request) moved to data
-            var request = temp; // request (stored in temp) moved to request
+            data = request; // data (disguised as request) moved to data
+            request = temp; // request (stored in temp) moved to request
         } // end if
 
         hashNavigator.dispatchHashpageload(data, textStatus, request);

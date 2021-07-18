@@ -28,7 +28,7 @@ body > header > nav a {
 }
 body > header > nav a:hover { color: #FFFFFF; }
 body > header > nav.mobile { height: auto; line-height: 30px; }
-body > header > nav.mobile a { position: inherit; }
+body > header > nav.mobile a { display: block; position: inherit; }
 
 body > main {
     margin: 0 auto;
@@ -83,10 +83,13 @@ div.alert { background-color: #EEEEEE; border-color: #CCCCCC; color: #222222; }
 div.danger { background-color: #FFDDDD; border-color: #EEBBBB; color: #662222; }
 div.success { background-color: #EEFFEE; border-color: #BBEEBB; color: #226622; }
 
-form { margin: 0px; }
-
 img { border-style: none; }
+
+form { margin: 0px; }
+button, input[type="submit"] { font-weight: bold; height: 22px; min-width: 70px; }
+input[type="text"] { height: 16px; }
 input[readonly], textarea[readonly] { color: #AAAAAA; cursor: default; }
+select { height: 22px; }
 
 .shaded-blue { background-color: #4141C6; color: #CCCCCC; }
 .shaded-blue > h1,
